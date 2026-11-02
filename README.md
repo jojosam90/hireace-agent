@@ -85,6 +85,14 @@ it works, but not your camera.
 **Settings (the gear icon, top right):** HireAce's voice. Other settings stay in
 `agent/.env.local` (see `src/settings.py`).
 
+**Word, Excel and PowerPoint:** HireAce controls them directly (`src/office.py`,
+`src/office_ops.py`), not through the mouse: text, formatting, tables, charts, pictures,
+slides, sheets, sorting, slide shows, new files, Save As and PDF. Edits happen freely and
+stay unsaved; saving to a file asks first, and deleting a sheet, closing without saving
+or replacing a file asks every time. Everything else on the PC goes through the real
+mouse and keyboard (PyAutoGUI), with the emergency stop. To test against the real apps
+(close them first): `HIREACE_TEST_OFFICE=1 uv run pytest tests/test_office_ops.py`.
+
 **Email (Gmail already open):** open Gmail and sign in, in Chrome or Edge. The bar under
 the phone link shows **Gmail connected** with the browser and account. HireAce reads the
 email there and sends from it: a new compose tab, filled in, the file attached (one quick

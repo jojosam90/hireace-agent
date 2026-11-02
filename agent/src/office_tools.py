@@ -41,6 +41,10 @@ class OfficeTools:
             self.excel_set_cells,
             self.ppt_edit,
             self.office_save,
+            self.office_do,
+            self.office_new,
+            self.office_save_as,
+            self.office_close,
             self.send_email,
             self.price_list,
             self.make_quotation,
@@ -196,6 +200,108 @@ class OfficeTools:
         return await self._run(
             context, "office_save", {"app": app, "document": document}
         )
+
+    @function_tool()
+    async def office_do(
+        self,
+        context: RunContext,
+        app: str,
+        op: str,
+        options: dict[str, str] | None = None,
+        document: str = "",
+    ) -> dict:
+        """Everything else in an open Word, Excel or PowerPoint file, directly and in a
+        moment: formatting, tables, charts, pictures, slides, sheets. Use this, never
+        the ribbon or the mouse. Nothing is saved until office_save or office_save_as.
+        All option values are text. Colours: "#RRGGBB" or a name like red. Sizes and
+        positions: points. rows: JSON list of rows, '[["Item","Qty"],["Gateway","150"]]'.
+
+        word (paragraph numbers from office_read; changes are tracked):
+          format: find or paragraph; bold, italic, underline, size, font, color,
+            highlight, style ("Heading 1"), align (left center right justify)
+          insert_table: rows; paragraph to insert after
+          insert_image: path; paragraph to insert after; width
+          delete_paragraph: paragraph
+          page_break: paragraph to insert after
+          bullets, numbering: paragraph; last_paragraph
+          accept_changes, reject_changes: all tracked changes
+        excel (sheet: optional, default the active one):
+          format: range; bold, italic, size, font, color, fill, number_format
+            ("#,##0.00"), align, wrap, column_width, border
+          insert_rows, delete_rows: row; count
+          insert_columns, delete_columns: column ("C"); count
+          add_sheet: name. rename_sheet: sheet; name. delete_sheet: sheet
+          sort: range; key ("B2"); descending; header ("no" if none)
+          filter: range. autofit: range. merge: range
+          chart: range; type (column bar line pie area scatter); title
+        powerpoint (slide numbers from office_read; shape names too):
+          add_slide: position; layout (title content two_content title_only blank);
+            title; body
+          delete_slide: slide. duplicate_slide: slide. move_slide: slide; to
+          add_textbox: slide; text; left, top, width, height; bold, size, color, align
+          format: slide; shape; bold, italic, size, font, color, align
+          move_shape: slide; shape; left, top, width, height
+          delete_shape: slide; shape
+          add_image: slide; path; left, top, width
+          add_table: slide; rows; left, top, width, height
+          set_notes: slide; text
+          start_show: slide. end_show
+
+        Args:
+            app: "word", "excel" or "powerpoint".
+            op: One of the operations above.
+            options: The operation's settings, e.g. {"paragraph": "3", "bold": "yes"}.
+            document: Part of the file name when several files are open.
+        """
+        args = {"app": app, "op": op, "options": options or {}, "document": document}
+        return await self._run(context, "office_do", args)
+
+    @function_tool()
+    async def office_new(self, context: RunContext, app: str) -> dict:
+        """Create a new blank Word document, Excel workbook or PowerPoint deck on
+        screen, starting the app if needed. Then office_do and office_save_as.
+
+        Args:
+            app: "word", "excel" or "powerpoint".
+        """
+        return await self._run(context, "office_new", {"app": app})
+
+    @function_tool()
+    async def office_save_as(
+        self,
+        context: RunContext,
+        app: str,
+        path: str,
+        overwrite: bool = False,
+        document: str = "",
+    ) -> dict:
+        """Save the open file under a new name or type, or export it as PDF (a PDF
+        leaves the file itself as it was). The user approves first.
+
+        Args:
+            app: "word", "excel" or "powerpoint".
+            path: The full path; its ending picks the type (.docx .doc .rtf .txt .xlsx
+                .xls .csv .pptx .ppt .pdf). A bare name goes in Documents.
+            overwrite: Only after the user agreed to replace an existing file.
+            document: Part of the file name when several files are open.
+        """
+        args = {"app": app, "path": path, "overwrite": overwrite, "document": document}
+        return await self._run(context, "office_save_as", args)
+
+    @function_tool()
+    async def office_close(
+        self, context: RunContext, app: str, save: str = "", document: str = ""
+    ) -> dict:
+        """Close one open file (the app stays open). The user approves first. With
+        unsaved changes it refuses until save says what to do: ask the user.
+
+        Args:
+            app: "word", "excel" or "powerpoint".
+            save: "yes" to save first, "no" to lose the changes (only if the user said so).
+            document: Part of the file name when several files are open.
+        """
+        args = {"app": app, "save": save, "document": document}
+        return await self._run(context, "office_close", args)
 
     @function_tool()
     async def send_email(

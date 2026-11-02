@@ -64,6 +64,10 @@ OFFICE_ACTIONS = {
     "excel_set_cells",
     "ppt_edit",
     "office_save",
+    "office_do",
+    "office_new",
+    "office_save_as",
+    "office_close",
     "make_quotation",
     "save_quotation",
 }
@@ -74,6 +78,20 @@ GMAIL_ACTIONS = {"send_email", "send_quotation"}
 # Always asked, even after the user approved something else in the call: each
 # quotation is approved before it is saved, and every email before it is sent
 ALWAYS_ASK = {"save_quotation", "send_quotation", "send_email"}
+
+
+def _always_asks(action: str, args: dict) -> bool:
+    """Asked even after an approval earlier in the call: emails and quotations, and
+    what cannot be undone or loses work."""
+    if action in ALWAYS_ASK:
+        return True
+    if action == "office_do":
+        return args.get("op") == "delete_sheet"
+    if action == "office_save_as":
+        return bool(args.get("overwrite"))
+    if action == "office_close":
+        return args.get("save") == "no"
+    return False
 
 
 def reply_subject(subject: str) -> str:
@@ -114,6 +132,14 @@ def _describe(action: str, args: dict) -> str:
         return f"open {PureWindowsPath(str(args.get('path', ''))).name}"
     if action == "office_save":
         return f"save the {args.get('app')} file"
+    if action == "office_do":
+        return f"{args.get('op')} in {args.get('app')}: {args.get('options')}"
+    if action == "office_save_as":
+        verb = "replace" if args.get("overwrite") else "save a copy as"
+        return f"{verb} {args.get('path')}"
+    if action == "office_close":
+        how = {"yes": "saving it", "no": "WITHOUT saving"}.get(args.get("save"), "")
+        return f"close the {args.get('app')} file {how}".strip()
     if action == "send_email":
         to = args.get("to") or []
         to = ", ".join(to) if isinstance(to, list) else str(to)
@@ -211,7 +237,7 @@ class Gatekeeper:
         if (
             decision.verdict == ASK
             and session in self._approved_sessions
-            and action not in ALWAYS_ASK
+            and not _always_asks(action, args)
         ):
             self._audit(
                 session,

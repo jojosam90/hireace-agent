@@ -128,6 +128,10 @@ KNOWN_ACTIONS = (
         "excel_set_cells",
         "ppt_edit",
         "office_save",
+        "office_do",
+        "office_new",
+        "office_save_as",
+        "office_close",
         "send_email",
         "make_quotation",
         "save_quotation",
@@ -325,6 +329,35 @@ def decide(action: str, args: dict, ctx: PageContext) -> Decision:
 
     if action == "office_save":
         return Decision(ASK, "Saving overwrites the file on the user's computer.")
+
+    if action == "office_new":
+        return Decision(ALLOW, "A new blank document (nothing is saved).")
+
+    if action == "office_do":
+        options = args.get("options") or {}
+        if looks_like_card_number(" ".join(str(v) for v in options.values())):
+            return Decision(DENY, PAYMENT_DENIAL)
+        if PureWindowsPath(str(options.get("path", ""))).suffix.lower() in (
+            _EXECUTABLE_EXTENSIONS | _MACRO_EXTENSIONS
+        ):
+            return Decision(DENY, "Only pictures can be inserted, never programs.")
+        if args.get("op") == "delete_sheet":
+            return Decision(ASK, "Deleting a sheet cannot be undone.")
+        # Unsaved edits the user can see and undo: allowed, like changing text
+        return Decision(ALLOW, "Edit an open document (not saved).")
+
+    if action == "office_save_as":
+        extension = PureWindowsPath(str(args.get("path", ""))).suffix.lower()
+        if extension in _EXECUTABLE_EXTENSIONS | _MACRO_EXTENSIONS:
+            return Decision(DENY, "Documents only, never programs or macro files.")
+        if args.get("overwrite"):
+            return Decision(ASK, "This replaces a file that already exists.")
+        return Decision(ASK, "Saves a new file on the user's computer.")
+
+    if action == "office_close":
+        if args.get("save") == "no":
+            return Decision(ASK, "Closing without saving loses the unsaved changes.")
+        return Decision(ASK, "Closes the document.")
 
     if action == "make_quotation":
         # A new Excel file and PDF from the template: nothing existing is changed

@@ -156,6 +156,60 @@ class Office:
         document.Save()
         return {"saved": document.FullName}
 
+    def _office_do(
+        self, app: str, op: str, options: dict | None = None, document: str = ""
+    ) -> dict:
+        """Formatting, tables, charts, images, slides, sheets (see office_ops.py)."""
+        import office_ops
+
+        ops = office_ops.OPS.get(app)
+        if ops is None:
+            raise OfficeError(f"Unknown app {app!r}; use word, excel or powerpoint.")
+        if op not in ops:
+            raise OfficeError(f"{app} can do: {', '.join(ops)}.")
+        application = self._app(app, document)
+        doc = None
+        if app == "word":
+            doc = self._word_doc(application)
+            doc.TrackRevisions = True  # the user sees every change as a tracked change
+        elif app == "powerpoint":
+            doc = self._presentation(application)
+        return {"done": op, **ops[op](application, doc, dict(options or {}))}
+
+    def _office_new(self, app: str) -> dict:
+        """A new blank file on screen, starting the app if it is not open."""
+        import win32com.client
+
+        if app not in APPS:
+            raise OfficeError(f"Unknown app {app!r}; use word, excel or powerpoint.")
+        application = win32com.client.Dispatch(APPS[app])
+        application.Visible = True
+        if app == "word":
+            new = application.Documents.Add()
+        elif app == "excel":
+            new = application.Workbooks.Add()
+        else:
+            new = application.Presentations.Add()
+            new.Slides.Add(1, 1)  # ppLayoutTitle
+        with _suppress_com():
+            application.Activate()
+        return {"created": new.Name}
+
+    def _office_save_as(
+        self, app: str, path: str, overwrite: bool = False, document: str = ""
+    ) -> dict:
+        import office_ops
+
+        application = self._app(app, document)
+        doc = self._active_document(application, app)
+        return office_ops.save_as(application, app, doc, path, overwrite)
+
+    def _office_close(self, app: str, save: str = "", document: str = "") -> dict:
+        import office_ops
+
+        doc = self._active_document(self._app(app, document), app)
+        return office_ops.close(app, doc, save)
+
     def _make_quotation(self, **args) -> dict:
         """A new quotation from the template: Excel file and PDF (see quotation.py)."""
         import quotation
