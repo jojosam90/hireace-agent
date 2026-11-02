@@ -32,17 +32,21 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 Push-Location $root
 try {
   # autocrlf off: files keep their committed LF endings (the app's lint rejects CRLF)
-  git -c core.autocrlf=false archive --format=zip -o (Join-Path $stage 'code.zip') HEAD start.ps1 panel.ps1 bubble.ps1 hireace.vbs README.md hireace.ico assets agent
+  $files = @(Get-Content (Join-Path $PSScriptRoot 'package-files.txt'))
+  git -c core.autocrlf=false archive --format=zip -o (Join-Path $stage 'code.zip') HEAD @files
   if ($LASTEXITCODE) { throw 'git archive failed' }
 } finally {
   Pop-Location
 }
 $app = Join-Path $stage 'app'
 Expand-Archive (Join-Path $stage 'code.zip') -DestinationPath $app
+# Which version this is, for the admin portal
+$version = "$(Get-Date -Format 'yyyy.MM.dd')-$(git -C $root rev-parse --short HEAD)"
+Set-Content -Path (Join-Path $app 'version.txt') -Encoding ascii -Value $version
 
 # 2. The keys. Not this PC's gatekeeper secret (setup makes a new one); each user
 #    signs in to their own Gmail in their browser.
-$keep = '^(LIVEKIT_URL|LIVEKIT_API_KEY|LIVEKIT_API_SECRET|OPENAI_API_KEY|EMAIL_SIGNATURE|OPENAI_VOICE|OPENAI_REALTIME_MODEL)='
+$keep = '^(LIVEKIT_URL|LIVEKIT_API_KEY|LIVEKIT_API_SECRET|OPENAI_API_KEY|EMAIL_SIGNATURE|OPENAI_VOICE|OPENAI_REALTIME_MODEL|HIREACE_PORTAL_URL)='
 $keys = [string[]](Get-Content (Join-Path $root 'agent\.env.local') | Where-Object { $_ -match $keep })
 # UTF-8 without a byte-order mark: a BOM would hide the first setting from the app
 [IO.File]::WriteAllLines((Join-Path $app 'agent\.env.local'), $keys, (New-Object Text.UTF8Encoding $false))

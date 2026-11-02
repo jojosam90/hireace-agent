@@ -359,6 +359,12 @@ try {
     $link.Save()
   }
   Complete-Step
+  # The monitor that reports to the admin portal: from every Windows sign-in, and now.
+  # Current user only, so no administrator rights are needed.
+  $monitor = Join-Path $env:WINDIR 'System32\wscript.exe'
+  $monitorScript = Join-Path $dest 'fleet.vbs'
+  Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'HireAce Monitor' -Value "`"$monitor`" `"$monitorScript`""
+  Start-Process $monitor -ArgumentList "`"$monitorScript`""
   $stepLabel.Text = 'Done: HireAce is on your desktop'
   $stepNow.Text = 'All steps finished'
   Wait-Ui

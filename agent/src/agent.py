@@ -25,6 +25,7 @@ from openai.types.realtime import AudioTranscription
 from openai.types.realtime.realtime_audio_input_turn_detection import ServerVad
 
 import approval_rpc
+import usage_log
 from action_backend import LocalBackend, RemoteBackend
 from browser import BrowserManager
 from careful_transcriber import CarefulTranscriber
@@ -347,6 +348,16 @@ GREETING = (
 GREET_TIMEOUT_S = 8
 
 
+async def refuse_over_limit(session, ctx) -> bool:
+    """The admin portal's usage limit: the call only says so, then ends."""
+    if not usage_log.limit_reached():
+        return False
+    logger.info("usage limit reached: refusing the call")
+    await session.generate_reply(instructions=usage_log.LIMIT_MESSAGE)
+    ctx.shutdown(reason="usage limit reached")
+    return True
+
+
 async def greet_first(session) -> None:
     """Ask the model for the opening line. If none has started GREET_TIMEOUT_S
     later (the model was slow or the request was lost), ask once more; never once
@@ -512,6 +523,11 @@ async def my_agent(ctx: JobContext):
         if publication.kind == rtc.TrackKind.KIND_AUDIO:
             logger.info(f"microphone unmuted ({participant.identity})")
 
+    # Token counts for the admin portal
+    @session.on("metrics_collected")
+    def _count_usage(event):
+        usage_log.record(event.metrics)
+
     # The web app reports what happens to the user's microphone (useMicWatchdog.ts)
     @ctx.room.on("data_received")
     def _log_client(packet: rtc.DataPacket):
@@ -548,6 +564,8 @@ async def my_agent(ctx: JobContext):
     await ctx.connect()
     # The panel on this PC mirrors the call, wherever it was started
     await backend.call_started()
+    if await refuse_over_limit(session, ctx):
+        return
     greeting = asyncio.create_task(greet_first(session))
     async def _stop_greeting() -> None:
         greeting.cancel()

@@ -39,3 +39,8 @@ installer/issued-licenses.csv
 # committed (installer/build.ps1 packages them). price_list.example.json shows the shape.
 agent/price_list.json
 agent/templates/quotation.xlsx
+
+# The key that signs updates, and the admin portal's key and local database
+installer/release-key.xml
+installer/release-publish-key.txt
+admin/.data/

@@ -34,6 +34,23 @@ param([switch]$Lan, [switch]$SkipBuild, [switch]$NoPanel, [switch]$Background)
 
 $ErrorActionPreference = 'Stop'
 
+# Turned off from the admin portal, or being updated from it (see fleet.ps1)
+$dataDir = Join-Path $env:USERPROFILE '.hireace-agent'
+foreach ($hold in @(
+    @('deactivated', 'HireAce has been turned off by your administrator.'),
+    @('updating', 'HireAce is being updated. Try again in a few minutes.'))) {
+  if (Test-Path (Join-Path $dataDir $hold[0])) {
+    Add-Type -AssemblyName System.Windows.Forms
+    [void][System.Windows.Forms.MessageBox]::Show($hold[1], 'HireAce', 'OK', 'Information')
+    exit 0
+  }
+}
+
+# The monitor that reports to the admin portal: already running after Windows sign-in;
+# this covers a PC where it stopped. It exits at once if it is running or no portal is set.
+$monitor = Join-Path $PSScriptRoot 'fleet.vbs'
+if (Test-Path $monitor) { Start-Process (Join-Path $env:WINDIR 'System32\wscript.exe') -ArgumentList "`"$monitor`"" }
+
 # One HireAce at a time (e.g. the desktop icon clicked twice): a second start shows
 # the open panel instead; two would fight over the same ports
 $single = New-Object System.Threading.Mutex($false, 'Local\HireAce')

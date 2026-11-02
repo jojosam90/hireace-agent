@@ -185,6 +185,12 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
+## Admin portal
+
+`admin/` is a separate web app for managing many workstations: online or offline, HireAce up or down,
+installing updates, restart, deactivate, and OpenAI usage with monthly limits. Each PC runs a small
+monitor (`fleet.ps1`) that checks in with it. See [admin/README.md](admin/README.md).
+
 ## Tech stack
 
 | Component | Technology |
