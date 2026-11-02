@@ -56,7 +56,7 @@ async def test_a_test_email_checks_sending(gmail):
 
 async def test_nothing_is_sent_until_gmail_is_signed_in(gmail):
     gmail.state = "signed_out"
-    with pytest.raises(EmailError, match="Open Gmail and sign in"):
+    with pytest.raises(EmailError, match="Gmail in Chrome or Edge"):
         await Emailer(gmail).send(["a@b.example"], "s", "m")
 
 

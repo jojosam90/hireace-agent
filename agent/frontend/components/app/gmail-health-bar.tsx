@@ -7,7 +7,6 @@ interface GmailHealth {
   checked: boolean;
   connected: boolean;
   accounts: { browser: string; email: string }[];
-  can_send: boolean;
 }
 
 const CHECK_EVERY_MS = 10_000;
@@ -76,9 +75,6 @@ export function GmailHealthBar() {
         />
         <span className="min-w-0 font-medium break-words">{text}</span>
       </div>
-      {connected && !health?.can_send && (
-        <p className="text-muted-foreground mt-1 pl-4">{t('gmailBarCannotSend')}</p>
-      )}
     </div>
   );
 }

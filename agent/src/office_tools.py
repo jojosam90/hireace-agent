@@ -208,8 +208,8 @@ class OfficeTools:
         attach_open: list[str] | None = None,
         attachments: list[str] | None = None,
     ) -> dict:
-        """Email documents to the people the user names, from the Gmail signed in in
-        your browser.
+        """Email documents to the people the user names, from the Gmail already open
+        in a browser.
 
         Write it for the person receiving it, not for the user: never "Sir". The
         greeting ("Hi,"), layout and sign-off are added for you. Save edited
@@ -332,7 +332,7 @@ class OfficeTools:
         """Email the quotation PDF (from save_quotation) as the reply to the inquiry.
 
         It goes to the customer who sent the inquiry, with the subject "Re: <inquiry
-        subject>", from the Gmail signed in in your browser. The user always approves
+        subject>", from the Gmail already open in a browser. The user always approves
         it on screen first (the card shows the address). The greeting ("Dear
         <contact>,") and the sign-off are added for you.
 

@@ -2,6 +2,7 @@
 
 import pytest
 
+import gmail as gmail_module
 from gmail import NOT_READY, GmailError
 
 SENDER = "sales@company.example"
@@ -38,6 +39,19 @@ class FakeGmail:
             {"to": to, "subject": subject, "text": text, "attachments": attachments}
         )
         return {"from": SENDER}
+
+
+@pytest.fixture(autouse=True)
+def no_real_browsers(monkeypatch):
+    """No test reads the PC's real browser tabs or sends from the real Gmail."""
+    monkeypatch.setattr(
+        gmail_module, "browser_tabs", lambda: {"windows": [], "selected": None}
+    )
+
+    def refuse(job):
+        raise AssertionError(f"a test tried to really send: {job}")
+
+    monkeypatch.setattr(gmail_module, "send_in_browser", refuse)
 
 
 @pytest.fixture

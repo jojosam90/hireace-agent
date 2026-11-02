@@ -3,6 +3,7 @@ with the same markers gmail.py relies on."""
 
 import json
 import re
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -117,7 +118,7 @@ async def test_signed_out_gmail_sends_nothing(fake_gmail):
     await state["start"]()
 
     assert (await gmail.open())["state"] == "signed_out"
-    with pytest.raises(GmailError, match="Open Gmail and sign in"):
+    with pytest.raises(GmailError, match="Gmail in Chrome or Edge"):
         await gmail.send(["a@b.example"], "s", "t", [])
     assert state["sent"] == []
 
@@ -167,14 +168,12 @@ def test_only_signed_in_gmail_tabs_count_in_any_browser():
         {"browser": "firefox", "tabs": []},
     ]
     assert signed_in_accounts(windows) == [
-        {"browser": "Edge", "email": "me.name@gmail.com"},
-        {"browser": "Chrome", "email": "sales@company.example"},
+        {"browser": "Edge", "process": "msedge", "email": "me.name@gmail.com"},
+        {"browser": "Chrome", "process": "chrome", "email": "sales@company.example"},
     ]
 
 
-async def test_health_finds_gmail_in_other_browsers_and_cannot_send_from_them(
-    fake_gmail, monkeypatch
-):
+async def test_health_finds_gmail_in_other_browsers(fake_gmail, monkeypatch):
     manager, _ = fake_gmail
     calls = []
 
@@ -193,7 +192,7 @@ async def test_health_finds_gmail_in_other_browsers_and_cannot_send_from_them(
         "checked": True,
         "connected": True,
         "accounts": [{"browser": "Edge", "email": "a@b.example"}],
-        "can_send": False,
+        "can_send": True,
     }
     await gmail.health()
     assert len(calls) == 1  # read again only after a while: it costs CPU
@@ -207,3 +206,102 @@ async def test_health_says_so_when_the_tabs_cannot_be_read(fake_gmail, monkeypat
     manager, _ = fake_gmail
     health = await GmailWindow(manager).health()
     assert not health["checked"] and not health["connected"]
+
+
+def edge_with_gmail():
+    return {
+        "windows": [{"browser": "msedge", "tabs": ["Inbox - me@gmail.com - Gmail"]}],
+        "selected": None,
+    }
+
+
+async def test_sends_from_the_gmail_already_open_in_another_browser(
+    fake_gmail, monkeypatch, tmp_path
+):
+    manager, _ = fake_gmail
+    jobs = []
+
+    def send(job):
+        jobs.append(job)
+        return {"sent": True}
+
+    monkeypatch.setattr(gmail_module, "browser_tabs", edge_with_gmail)
+    monkeypatch.setattr(gmail_module, "send_in_browser", send)
+
+    sent = await GmailWindow(manager).send(
+        ["a@b.example"], "Re: Inquiry", "Dear Ms Tan,\n\nHello & thanks", [r"C:\q.pdf"]
+    )
+
+    assert sent == {"from": "me@gmail.com"}
+    [job] = jobs
+    assert job["browser"] == "msedge" and job["email"] == "me@gmail.com"
+    assert job["subject"] == "Re: Inquiry" and job["files"] == [r"C:\q.pdf"]
+    query = parse_qs(urlparse(job["url"]).query)
+    assert query["authuser"] == ["me@gmail.com"]
+    assert query["to"] == ["a@b.example"] and query["su"] == ["Re: Inquiry"]
+    assert query["body"] == ["Dear Ms Tan,\n\nHello & thanks"]
+    assert query["view"] == ["cm"] and query["hl"] == ["en"]
+    assert not manager.running  # HireAce's own browser was not needed
+
+
+async def test_a_send_that_fails_in_the_browser_says_why(fake_gmail, monkeypatch):
+    manager, _ = fake_gmail
+    monkeypatch.setattr(gmail_module, "browser_tabs", edge_with_gmail)
+    monkeypatch.setattr(
+        gmail_module,
+        "send_in_browser",
+        lambda job: {"sent": False, "reason": "Gmail opened in another account."},
+    )
+    with pytest.raises(GmailError, match="another account"):
+        await GmailWindow(manager).send(["a@b.example"], "s", "t", [])
+
+
+async def test_a_message_too_long_for_the_compose_address_is_refused(
+    fake_gmail, monkeypatch
+):
+    manager, _ = fake_gmail
+    monkeypatch.setattr(gmail_module, "browser_tabs", edge_with_gmail)
+    with pytest.raises(GmailError, match="too long"):
+        await GmailWindow(manager).send(["a@b.example"], "s", "t" * 9000, [])
+
+
+async def test_gmail_in_a_minimized_browser_still_counts(fake_gmail, monkeypatch):
+    manager, _ = fake_gmail
+    title = "Inbox (1) - me@gmail.com - Gmail and 2 more pages - Microsoft Edge"
+    monkeypatch.setattr(
+        gmail_module,
+        "browser_tabs",
+        lambda: {
+            "windows": [{"browser": "msedge", "window": 7, "title": title, "tabs": []}],
+            "selected": None,
+        },
+    )
+    assert (await GmailWindow(manager).health())["accounts"] == [
+        {"browser": "Edge", "email": "me@gmail.com"}
+    ]
+
+
+async def test_a_minimized_window_keeps_its_last_known_gmail_tab(
+    fake_gmail, monkeypatch
+):
+    manager, _ = fake_gmail
+    gmail = GmailWindow(manager)
+    tabs = ["Other page", "Inbox - me@gmail.com - Gmail"]
+
+    def windows():
+        return {
+            "windows": [
+                {"browser": "msedge", "window": 7, "title": "Other page", "tabs": tabs}
+            ],
+            "selected": None,
+        }
+
+    monkeypatch.setattr(gmail_module, "browser_tabs", windows)
+    assert len(await gmail._open_accounts()) == 1
+    tabs = []  # minimized: Windows now reports none
+    assert len(await gmail._open_accounts()) == 1
+
+    monkeypatch.setattr(
+        gmail_module, "browser_tabs", lambda: {"windows": [], "selected": None}
+    )
+    assert await gmail._open_accounts() == []  # closed: forgotten

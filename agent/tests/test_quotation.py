@@ -208,7 +208,7 @@ async def test_a_quotation_is_never_asked_while_gmail_is_signed_out(tmp_path):
         {"to": "a@b.example", "subject": "Q", "attachments": [str(tmp_path / "q.pdf")]},
     )
 
-    assert result["status"] == "error" and "Open Gmail" in result["reason"]
+    assert result["status"] == "error" and "Gmail in Chrome or Edge" in result["reason"]
     assert gk.pending() == []
 
 

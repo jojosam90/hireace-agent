@@ -68,7 +68,7 @@ OFFICE_ACTIONS = {
     "save_quotation",
 }
 
-# Sent from the Gmail signed in in the agent's browser (gmail.py)
+# Sent from the Gmail open in the user's browser or the agent's (gmail.py)
 GMAIL_ACTIONS = {"send_email", "send_quotation"}
 
 # Always asked, even after the user approved something else in the call: each
@@ -198,7 +198,7 @@ class Gatekeeper:
         # cannot be sent
         if (
             action in GMAIL_ACTIONS
-            and (await self.emailer.gmail.status())["state"] != "ready"
+            and not (await self.emailer.gmail.health())["can_send"]
         ):
             return {"status": "error", "reason": NOT_READY}
         if action == "send_quotation":

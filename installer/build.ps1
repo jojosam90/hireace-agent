@@ -41,7 +41,7 @@ $app = Join-Path $stage 'app'
 Expand-Archive (Join-Path $stage 'code.zip') -DestinationPath $app
 
 # 2. The keys. Not this PC's gatekeeper secret (setup makes a new one); each user
-#    signs in to Gmail in HireAce's browser (Settings > Open Gmail).
+#    signs in to their own Gmail in their browser.
 $keep = '^(LIVEKIT_URL|LIVEKIT_API_KEY|LIVEKIT_API_SECRET|OPENAI_API_KEY|EMAIL_SIGNATURE|OPENAI_VOICE|OPENAI_REALTIME_MODEL)='
 $keys = [string[]](Get-Content (Join-Path $root 'agent\.env.local') | Where-Object { $_ -match $keep })
 # UTF-8 without a byte-order mark: a BOM would hide the first setting from the app

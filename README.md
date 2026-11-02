@@ -82,20 +82,16 @@ copy .env.example .env.local
 clean-up `gpt-4.1-mini`, screen helper `gpt-4.1-mini`. The agent sees your screen when
 it works, but not your camera.
 
-**Settings (the gear icon, top right):** voice, sign-offs, the quotation template and
-folders, where to search for files, and the OpenAI key. They are kept in
-`%USERPROFILE%\.hireace-agent\settings.json` and override `.env.local`; new calls use
-them. Settings can be changed only on the PC itself (not from a phone).
+**Settings (the gear icon, top right):** HireAce's voice. Other settings stay in
+`agent/.env.local` (see `src/settings.py`).
 
-**Email (Gmail on standby):** in Settings, **Open Gmail** opens Gmail in HireAce's own
-Chrome window; sign in there once and leave the window open (it can be minimized). The
-badge shows **Ready** with the account once it is signed in; **Send test** checks it.
-HireAce reads email there with its page tools and sends by filling in Gmail's own
-compose page in a new tab (attachments added through the page, sent with Ctrl+Enter,
-tab closed again). No Google Cloud project or API keys. You name who each email goes
-to (or it replies to the email being answered); a quotation goes to the inquiry's
-sender with "Re: <subject>" and no copy. Every email waits for your approval, and an
-email is never offered for approval while Gmail is not signed in.
+**Email (Gmail already open):** open Gmail and sign in, in Chrome or Edge. The bar under
+the phone link shows **Gmail connected** with the browser and account. HireAce reads the
+email there and sends from it: a new compose tab, filled in, the file attached (one quick
+mouse click and Windows' file box), sent and closed. No Google Cloud project or API
+keys. You name who each email goes to (or it replies to the email being answered); a
+quotation goes to the inquiry's sender with "Re: <subject>" and no copy. Every email
+waits for your approval, and is never offered for approval while Gmail is not open.
 
 ## Running
 
@@ -123,16 +119,13 @@ back, drag it to move it. If you are away from the mouse and keyboard for 5 minu
 knocks on the screen (again every 2 minutes) until you are back.
 
 A call started from the phone appears on the PC's panel by itself and follows the
-conversation live, read-only, with no sound. The bar under the phone link shows
-whether Gmail is signed in, in any browser; sending needs it signed in in HireAce's
-own browser (Settings: Open Gmail).
+conversation live, read-only, with no sound.
 
 Noise cancellation is off by default because it made audio choppy on Windows; set
 `NOISE_CANCELLATION=on` in `agent/.env.local` for a noisy room.
 
 - **First run:** the agent's Chrome window has its own profile
-  (`%USERPROFILE%\.hireace-agent\chrome-profile`). Sign in to websites there once, and
-  connect Gmail in Settings.
+  (`%USERPROFILE%\.hireace-agent\chrome-profile`). Sign in to websites there once.
 - **Language:** the **EN | 中文** switch (top right) picks English or Mandarin for the
   next call. It is sent to the agent as dispatch metadata (`src/agent.py` `LANGUAGES`).
 - **Phone viewer:** run with `-Lan`, open `http://<PC's IP>:3001` on the phone, start a

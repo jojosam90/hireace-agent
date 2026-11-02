@@ -486,7 +486,10 @@ async def test_email_before_gmail_is_signed_in_says_where_to_sign_in(audit_path)
             FakeBrowser(), emailer=FakeEmailer(state), audit_path=audit_path
         )
         result = await gk.submit("c", "send_email", DECK)
-        assert result["status"] == "error" and "Open Gmail" in result["reason"]
+        assert (
+            result["status"] == "error"
+            and "Gmail in Chrome or Edge" in result["reason"]
+        )
         assert gk.pending() == []  # never asked to approve what cannot be sent
 
 

@@ -7,8 +7,7 @@
   license.ps1), installs what is
   missing (uv for Python, Node.js, pnpm), copies HireAce to
   %LOCALAPPDATA%\HireAce, builds the app and puts a "HireAce" shortcut on the
-  desktop. Email is set up afterwards in the app: Settings (the gear icon) > Open
-  Gmail, and sign in once. Running it again updates an existing installation and keeps
+  desktop. For email, open Gmail in Chrome or Edge and sign in. Running it again updates an existing installation and keeps
   its settings (they live in %USERPROFILE%\.hireace-agent).
   Progress shows in a small window with a progress bar; every step's output goes
   to %TEMP%\HireAceSetup.log.
