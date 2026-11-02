@@ -644,3 +644,31 @@ async def test_a_test_email_from_settings(http, gmail):
     ).json()
     assert sent["sent"] and gmail.sent[0]["to"] == ["me@home.example"]
     assert bad == {"sent": False, "reason": "'nobody' is not an email address."}
+
+
+async def test_the_panel_can_find_the_call_to_mirror(http):
+    async def live():
+        return await (await http.get("/v1/calls", headers=TOKEN)).json()
+
+    assert (await http.get("/v1/calls")).status == 401
+    assert await live() == {"room": None}
+
+    await http.post("/v1/sessions/call-1/start", headers=TOKEN)
+    await http.post("/v1/sessions/call-1/start", headers=TOKEN)  # reported twice
+    assert await live() == {"room": "call-1"}
+    await http.post("/v1/sessions/call-2/start", headers=TOKEN)
+    assert await live() == {"room": "call-2"}  # the latest
+
+    await http.post("/v1/sessions/call-2/end", headers=TOKEN)
+    assert await live() == {"room": "call-1"}
+    await http.post("/v1/sessions/call-1/end", headers=TOKEN)
+    assert await live() == {"room": None}
+
+
+async def test_gmail_health_for_the_settings_bar(http, gmail):
+    assert (await http.get("/v1/gmail/health")).status == 401
+    health = await (await http.get("/v1/gmail/health", headers=TOKEN)).json()
+    assert health["connected"] and health["can_send"]
+    gmail.state = "signed_out"
+    health = await (await http.get("/v1/gmail/health", headers=TOKEN)).json()
+    assert not health["connected"] and health["accounts"] == []

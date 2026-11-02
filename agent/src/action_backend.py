@@ -49,6 +49,9 @@ class LocalBackend:
         except DesktopError:
             return None
 
+    async def call_started(self) -> None:
+        pass  # console mode and tests: no panel to mirror the call
+
     async def close(self) -> None:
         self._gatekeeper.end_session(self.session)
         await self._browser.close()
@@ -108,6 +111,10 @@ class RemoteBackend:
                 return await resp.read() if resp.status == 200 else None
         except aiohttp.ClientError:
             return None
+
+    async def call_started(self) -> None:
+        """Lets the panel on this PC mirror the call, wherever it was started."""
+        await self._request("POST", f"/v1/sessions/{self.session}/start")
 
     async def close(self) -> None:
         # The call ended: clear its approval and any cards still waiting

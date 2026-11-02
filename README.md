@@ -117,10 +117,15 @@ top of other apps and you can drag it anywhere by its title bar. The **Full view
 uses its own Chrome profile, so allow the microphone once and it remembers. (Also at
 http://localhost:3001.) Ctrl+C stops everything, including the panel.
 Closed the panel? Reopen it with `powershell -ExecutionPolicy Bypass -File .\panel.ps1`.
-Minimize the panel and the HireAce assistant stands at the bottom right of the screen
-(`bubble.ps1`, drawn by `assets/make_avatar.py`): click her to bring the panel back,
-drag her to move her. If you are away from the mouse and keyboard for 5 minutes she
+Minimize the panel and a little HireAce character sits at the bottom right of the
+screen (`bubble.ps1`, drawn by `assets/make_avatar.py`): click it to bring the panel
+back, drag it to move it. If you are away from the mouse and keyboard for 5 minutes it
 knocks on the screen (again every 2 minutes) until you are back.
+
+A call started from the phone appears on the PC's panel by itself and follows the
+conversation live, read-only, with no sound. The bar under the phone link shows
+whether Gmail is signed in, in any browser; sending needs it signed in in HireAce's
+own browser (Settings: Open Gmail).
 
 Noise cancellation is off by default because it made audio choppy on Windows; set
 `NOISE_CANCELLATION=on` in `agent/.env.local` for a noisy room.

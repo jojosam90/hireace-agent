@@ -1,22 +1,22 @@
 <#
 .SYNOPSIS
-  The HireAce assistant who stands on the desktop while the panel is minimized.
+  The little HireAce character on the desktop while the panel is minimized.
 
 .DESCRIPTION
   Started by panel.ps1 with the panel's window. When the panel is minimized, the
-  assistant (assets\avatar*.png, drawn by assets\make_avatar.py) stands at the
+  character (assets\avatar*.png, drawn by assets\make_avatar.py) sits at the
   bottom right of the screen, above the taskbar, on top of other windows, and
   blinks now and then. When the user has been away from the mouse and keyboard
-  for -IdleMinutes, she knocks on the screen (knock... knock, assets\knock.wav),
+  for -IdleMinutes, it knocks on the screen (knock... knock, assets\knock.wav),
   again every 2 minutes, until they are back. A click brings the panel back;
-  dragging moves her. She leaves when the panel is closed.
+  dragging moves it. It leaves when the panel is closed.
 
 .EXAMPLE
   powershell -WindowStyle Hidden -File .\bubble.ps1 -Panel <window handle>
 #>
 param(
   [Parameter(Mandatory = $true)][long]$Panel,
-  # Away from the mouse and keyboard this long (minutes) before she knocks
+  # Away from the mouse and keyboard this long (minutes) before it knocks
   [double]$IdleMinutes = 5
 )
 
@@ -31,7 +31,7 @@ using System.Windows.Forms;
 
 namespace HireAce {
   // A window drawn from a PNG with its transparency (a layered window), so the
-  // assistant and her shadow stand on the desktop with no box around them; clicks
+  // character and its shadow sit on the desktop with no box around them; clicks
   // on the transparent parts go to the window below.
   public class Bubble : Form {
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -59,13 +59,13 @@ namespace HireAce {
     const int KnockAgainSeconds = 120;
 
     readonly IntPtr panel;
-    readonly Bitmap[] frames;  // standing, blinking, hand up, tapping the screen
+    readonly Bitmap[] frames;  // resting, blinking, hand up, tapping the screen
     readonly SoundPlayer knock;
     readonly int idleLimitSeconds;
     bool moved, down, dragging;
     Point downAt, formAt;
     int ticks;
-    int knockStep = -1;  // where in KnockFrames she is; -1: not knocking
+    int knockStep = -1;  // where in KnockFrames it is; -1: not knocking
     DateTime nextKnock = DateTime.MinValue;
 
     Bubble(IntPtr panel, Bitmap[] frames, SoundPlayer knock, double idleMinutes) {
@@ -156,7 +156,7 @@ namespace HireAce {
       try { knock.Play(); } catch (Exception) { }  // no sound device: knock silently
     }
 
-    // Standing on the taskbar at the bottom right of the screen the panel was on
+    // On the taskbar at the bottom right of the screen the panel was on
     void StandAtTheBottomRight() {
       Rectangle area = Screen.FromHandle(panel).WorkingArea;
       Location = new Point(area.Right - Width - 24, area.Bottom - Height);
@@ -206,7 +206,7 @@ namespace HireAce {
       SetProcessDPIAware();
       Application.EnableVisualStyles();
       int height;
-      using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) { height = (int)(160 * g.DpiX / 96); }
+      using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) { height = (int)(110 * g.DpiX / 96); }
       string[] names = { "avatar.png", "avatar-blink.png", "avatar-knock1.png", "avatar-knock2.png" };
       Bitmap[] frames = new Bitmap[names.Length];
       for (int i = 0; i < names.Length; i++) frames[i] = LoadScaled(System.IO.Path.Combine(folder, names[i]), height);

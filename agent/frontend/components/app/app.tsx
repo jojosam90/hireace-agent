@@ -8,6 +8,7 @@ import type { AppConfig } from '@/app-config';
 import { AgentSessionProvider } from '@/components/agents-ui/agent-session-provider';
 import { StartAudioButton } from '@/components/agents-ui/start-audio-button';
 import { ApprovalPanel } from '@/components/app/approval-panel';
+import { CallMirror } from '@/components/app/call-mirror';
 import { HireAceLogo } from '@/components/app/hireace-logo';
 import { LanguageSwitch } from '@/components/app/language-switch';
 import { Notifications } from '@/components/app/notifications';
@@ -55,6 +56,7 @@ export function App({ appConfig }: AppProps) {
       <main className="@container relative z-10 grid h-svh grid-cols-1 place-content-center">
         <ViewController appConfig={appConfig} />
       </main>
+      <CallMirror />
       <HireAceLogo />
       <PcScreenView />
       <Notifications />

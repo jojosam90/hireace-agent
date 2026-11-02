@@ -33,7 +33,7 @@ const FULL_WIDTH: Record<string, string> = {
 const CJK_GAP =
   /(?<=[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef])\s+(?=[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef])/g;
 
-function tidyCjkSpacing(text: string): string {
+export function tidyCjkSpacing(text: string): string {
   return text
     .replace(AFTER_CJK_ASCII_PUNCT, (_, mark: string) => FULL_WIDTH[mark])
     .replace(CJK_GAP, '');

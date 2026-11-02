@@ -8,7 +8,7 @@ import pytest
 
 import gmail as gmail_module
 from browser import BrowserManager
-from gmail import GmailError, GmailWindow
+from gmail import GmailError, GmailWindow, signed_in_accounts
 
 INBOX = "<title>Inbox (3) - sales@company.example - Gmail</title><p>Inbox</p>"
 SIGNED_OUT = "<title>Gmail</title><p>Loading</p>"
@@ -146,3 +146,64 @@ async def test_open_in_gmail_shows_the_link_in_hireaces_browser(fake_gmail):
     assert manager.pages()[0].url == link
     with pytest.raises(GmailError, match="Only Gmail links"):
         await gmail.open("https://evil.example/mail")
+
+
+def test_only_signed_in_gmail_tabs_count_in_any_browser():
+    windows = [
+        {
+            "browser": "msedge",
+            "tabs": [
+                "Inbox (3) - Me.Name@Gmail.com - Gmail",
+                "gmail login - Google Search",
+                "Gmail",
+                "Sign in - Google Accounts",
+            ],
+        },
+        {
+            "browser": "chrome",
+            "tabs": ["Inbox - sales@company.example - Company Mail", "Example Domain"],
+        },
+        {"browser": "msedge", "tabs": ["Sent - me.name@gmail.com - Gmail"]},
+        {"browser": "firefox", "tabs": []},
+    ]
+    assert signed_in_accounts(windows) == [
+        {"browser": "Edge", "email": "me.name@gmail.com"},
+        {"browser": "Chrome", "email": "sales@company.example"},
+    ]
+
+
+async def test_health_finds_gmail_in_other_browsers_and_cannot_send_from_them(
+    fake_gmail, monkeypatch
+):
+    manager, _ = fake_gmail
+    calls = []
+
+    def tabs():
+        calls.append(1)
+        return {
+            "windows": [{"browser": "msedge", "tabs": ["Inbox - a@b.example - Gmail"]}],
+            "selected": None,
+        }
+
+    monkeypatch.setattr(gmail_module, "browser_tabs", tabs)
+    gmail = GmailWindow(manager)
+
+    health = await gmail.health()
+    assert health == {
+        "checked": True,
+        "connected": True,
+        "accounts": [{"browser": "Edge", "email": "a@b.example"}],
+        "can_send": False,
+    }
+    await gmail.health()
+    assert len(calls) == 1  # read again only after a while: it costs CPU
+
+
+async def test_health_says_so_when_the_tabs_cannot_be_read(fake_gmail, monkeypatch):
+    def broken():
+        raise OSError("no")
+
+    monkeypatch.setattr(gmail_module, "browser_tabs", broken)
+    manager, _ = fake_gmail
+    health = await GmailWindow(manager).health()
+    assert not health["checked"] and not health["connected"]

@@ -18,6 +18,15 @@ class FakeGmail:
     async def status(self) -> dict:
         return {"state": self.state, "email": SENDER if self.state == "ready" else ""}
 
+    async def health(self) -> dict:
+        ready = self.state == "ready"
+        return {
+            "checked": True,
+            "connected": ready,
+            "accounts": [{"browser": "Chrome", "email": SENDER}] if ready else [],
+            "can_send": ready,
+        }
+
     async def open(self, link: str = "") -> dict:
         self.opened += 1
         return await self.status()

@@ -1,5 +1,6 @@
 'use client';
 
+import { GmailHealthBar } from '@/components/app/gmail-health-bar';
 import { PhoneLink } from '@/components/app/phone-link';
 import { Button } from '@/components/ui/button';
 import { useUiLanguage } from '@/lib/i18n';
@@ -38,6 +39,7 @@ export const WelcomeView = ({
         )}
 
         {agentName && phoneSiteUrl && <PhoneLink siteUrl={phoneSiteUrl} agentName={agentName} />}
+        <GmailHealthBar />
       </section>
     </div>
   );

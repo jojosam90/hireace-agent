@@ -177,6 +177,15 @@ class Gatekeeper:
         # else asks during that call. Payments are DENY, never ASK, so they stay
         # blocked. A new call is a new session.
         self._approved_sessions: set[str] = set()
+        # Calls running now, oldest first: the panel on this PC mirrors the latest
+        self._live_calls: list[str] = []
+
+    def start_session(self, session: str) -> None:
+        if session not in self._live_calls:
+            self._live_calls.append(session)
+
+    def live_call(self) -> str | None:
+        return self._live_calls[-1] if self._live_calls else None
 
     async def submit(self, session: str, action: str, args: dict) -> dict:
         if action in DESKTOP_ACTIONS and self._desktop is None:
@@ -285,6 +294,8 @@ class Gatekeeper:
     def end_session(self, session: str) -> None:
         """The call ended: drop its approval and any cards still waiting."""
         self._approved_sessions.discard(session)
+        if session in self._live_calls:
+            self._live_calls.remove(session)
         for approval in self._approvals.values():
             if approval.session == session and approval.state == "pending":
                 approval.state = "expired"
@@ -522,6 +533,13 @@ def create_app(
         gatekeeper.end_session(request.match_info["session"])
         return web.json_response({"ended": True})
 
+    async def start_session(request: web.Request) -> web.Response:
+        gatekeeper.start_session(request.match_info["session"])
+        return web.json_response({"started": True})
+
+    async def live_call(_: web.Request) -> web.Response:
+        return web.json_response({"room": gatekeeper.live_call()})
+
     async def status(request: web.Request) -> web.Response:
         return web.json_response(gatekeeper.status(request.match_info["approval_id"]))
 
@@ -570,6 +588,9 @@ def create_app(
     async def gmail_status(_: web.Request) -> web.Response:
         return web.json_response(await gmail().status())
 
+    async def gmail_health(_: web.Request) -> web.Response:
+        return web.json_response(await gmail().health())
+
     async def gmail_open(request: web.Request) -> web.Response:
         body = await request.json() if request.can_read_body else {}
         try:
@@ -593,7 +614,9 @@ def create_app(
         [
             web.post("/v1/actions", submit),
             web.get("/v1/approvals", pending),
+            web.post("/v1/sessions/{session}/start", start_session),
             web.post("/v1/sessions/{session}/end", end_session),
+            web.get("/v1/calls", live_call),
             web.get("/v1/approvals/{approval_id}", status),
             web.post("/v1/approvals/{approval_id}", resolve),
             web.get("/v1/audit", audit),
@@ -601,6 +624,7 @@ def create_app(
             web.get("/v1/settings", get_settings),
             web.post("/v1/settings", save_settings),
             web.get("/v1/gmail", gmail_status),
+            web.get("/v1/gmail/health", gmail_health),
             web.post("/v1/gmail/open", gmail_open),
             web.post("/v1/gmail/test", gmail_test),
             web.get("/healthz", health),

@@ -14,6 +14,7 @@ the language of Gmail: the compose body (g_editable), the file input and Ctrl+En
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 from pathlib import Path
@@ -23,6 +24,7 @@ from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from browser import BrowserManager
+from local_desktop import browser_tabs
 
 GMAIL_URL = "https://mail.google.com/"
 SEND_TIMEOUT_S = 60
@@ -32,19 +34,79 @@ NOT_READY = (
     "Settings (the gear icon), tap Open Gmail and sign in there, then try again."
 )
 
+logger = logging.getLogger("hireace.gmail")
+
 _ACCOUNT = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _ACCOUNT_PATH = re.compile(r"/mail/u/\d+/")
 # Gmail, and Google's account chooser that leads to it
 _GOOGLE_HOSTS = {"mail.google.com", "accounts.google.com"}
 
 
+# A signed-in Gmail tab names its account: "Inbox (3) - name@gmail.com - Gmail" (or
+# "- Company Mail" on Workspace), so a search page about Gmail does not count
+_SIGNED_IN_TAB = re.compile(
+    r"-\s*([\w.+-]+@[\w-]+(?:\.[\w-]+)+)\s*-\s*[^-]*mail\b", re.IGNORECASE
+)
+_BROWSER_NAMES = {
+    "chrome": "Chrome",
+    "msedge": "Edge",
+    "firefox": "Firefox",
+    "brave": "Brave",
+    "opera": "Opera",
+}
+HEALTH_CACHE_S = 15  # reading every browser's tabs takes about a second of CPU
+
+
 class GmailError(Exception):
     """A user-facing Gmail failure."""
+
+
+def signed_in_accounts(windows: list[dict]) -> list[dict]:
+    """The Gmail accounts open in these browser windows, without repeats."""
+    found: list[dict] = []
+    for window in windows:
+        for tab in window.get("tabs") or []:
+            match = _SIGNED_IN_TAB.search(tab)
+            if not match:
+                continue
+            browser = window.get("browser", "")
+            account = {
+                "browser": _BROWSER_NAMES.get(browser, browser),
+                "email": match.group(1).lower(),
+            }
+            if account not in found:
+                found.append(account)
+    return found
 
 
 class GmailWindow:
     def __init__(self, browser: BrowserManager) -> None:
         self._browser = browser
+        self._health: tuple[float, dict] | None = None
+        self._health_lock = asyncio.Lock()
+
+    async def health(self) -> dict:
+        """Is Gmail signed in anywhere: every open browser, read-only (no tab is
+        switched). can_send: signed in in HireAce's own browser, where sending works."""
+        async with self._health_lock:
+            if self._health and time.monotonic() - self._health[0] < HEALTH_CACHE_S:
+                return self._health[1]
+            checked = True
+            try:
+                tabs = await asyncio.to_thread(browser_tabs)
+                accounts = signed_in_accounts(tabs["windows"])
+            except Exception as exc:
+                logger.warning("could not read the browser tabs: %s", exc)
+                checked, accounts = False, []
+            own = await self.status()
+            result = {
+                "checked": checked,
+                "connected": bool(accounts) or own["state"] == "ready",
+                "accounts": accounts,
+                "can_send": own["state"] == "ready",
+            }
+            self._health = (time.monotonic(), result)
+            return result
 
     async def status(self) -> dict:
         """ "ready" (signed in, can send), "signed_out", "not_open" or "closed"
