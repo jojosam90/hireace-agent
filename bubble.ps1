@@ -1,34 +1,43 @@
 <#
 .SYNOPSIS
-  The little HireAce agent that floats on the desktop while the panel is minimized.
+  The HireAce assistant who stands on the desktop while the panel is minimized.
 
 .DESCRIPTION
   Started by panel.ps1 with the panel's window. When the panel is minimized, the
-  mascot (assets\bubble.png) appears where the panel was, stays on top and blinks now
-  and then; a click brings the panel back, dragging moves it. It quits when the panel
-  is closed.
+  assistant (assets\avatar*.png, drawn by assets\make_avatar.py) stands at the
+  bottom right of the screen, above the taskbar, on top of other windows, and
+  blinks now and then. When the user has been away from the mouse and keyboard
+  for -IdleMinutes, she knocks on the screen (knock... knock, assets\knock.wav),
+  again every 2 minutes, until they are back. A click brings the panel back;
+  dragging moves her. She leaves when the panel is closed.
 
 .EXAMPLE
   powershell -WindowStyle Hidden -File .\bubble.ps1 -Panel <window handle>
 #>
-param([Parameter(Mandatory = $true)][long]$Panel)
+param(
+  [Parameter(Mandatory = $true)][long]$Panel,
+  # Away from the mouse and keyboard this long (minutes) before she knocks
+  [double]$IdleMinutes = 5
+)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing -TypeDefinition @'
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace HireAce {
-  // A window drawn from a PNG with its transparency (a layered window), so the round
-  // mascot and its soft shadow float on the desktop with no box around them.
+  // A window drawn from a PNG with its transparency (a layered window), so the
+  // assistant and her shadow stand on the desktop with no box around them; clicks
+  // on the transparent parts go to the window below.
   public class Bubble : Form {
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     struct BlendFunction { public byte Op, Flags, Alpha, Format; }
     [StructLayout(LayoutKind.Sequential)]
-    struct Rect { public int Left, Top, Right, Bottom; }
+    struct LastInput { public uint Size, Time; }
 
     [DllImport("user32.dll")] static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr dst, ref Point at, ref Size size, IntPtr src, ref Point from, int key, ref BlendFunction blend, int flags);
     [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hwnd);
@@ -41,25 +50,34 @@ namespace HireAce {
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hwnd, int cmd);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
-    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+    [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LastInput info);
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
 
+    // The knock: hand up, tap (knock sound), back, tap (knock sound), hand up, stand
+    static readonly int[] KnockFrames = { 2, 3, 2, 3, 2 };
+    const int TickMs = 250;
+    const int KnockAgainSeconds = 120;
+
     readonly IntPtr panel;
-    readonly Bitmap open, blink;
-    Rect panelRect;
+    readonly Bitmap[] frames;  // standing, blinking, hand up, tapping the screen
+    readonly SoundPlayer knock;
+    readonly int idleLimitSeconds;
     bool moved, down, dragging;
     Point downAt, formAt;
     int ticks;
+    int knockStep = -1;  // where in KnockFrames she is; -1: not knocking
+    DateTime nextKnock = DateTime.MinValue;
 
-    Bubble(IntPtr panel, Bitmap open, Bitmap blink) {
+    Bubble(IntPtr panel, Bitmap[] frames, SoundPlayer knock, double idleMinutes) {
       this.panel = panel;
-      this.open = open;
-      this.blink = blink;
+      this.frames = frames;
+      this.knock = knock;
+      idleLimitSeconds = (int)(idleMinutes * 60);
       FormBorderStyle = FormBorderStyle.None;
       ShowInTaskbar = false;
       StartPosition = FormStartPosition.Manual;
       TopMost = true;
-      Size = open.Size;
+      Size = frames[0].Size;
       Cursor = Cursors.Hand;
       new ToolTip().SetToolTip(this, "HireAce - click to open");
       MouseDown += delegate(object s, MouseEventArgs e) {
@@ -76,7 +94,7 @@ namespace HireAce {
         down = false; dragging = false;
       };
       Timer timer = new Timer();
-      timer.Interval = 250;
+      timer.Interval = TickMs;
       timer.Tick += delegate { Check(); };
       timer.Start();
     }
@@ -87,36 +105,65 @@ namespace HireAce {
     }
     protected override bool ShowWithoutActivation { get { return true; } }
 
+    // Seconds since the user last touched the mouse or keyboard
+    static int IdleSeconds() {
+      LastInput info = new LastInput();
+      info.Size = (uint)Marshal.SizeOf(info);
+      if (!GetLastInputInfo(ref info)) return 0;
+      return (int)(((uint)Environment.TickCount - info.Time) / 1000);
+    }
+
     void Check() {
       if (!IsWindow(panel)) { Application.Exit(); return; }
-      bool minimized = IsIconic(panel);
-      if (!minimized) {
-        GetWindowRect(panel, out panelRect);
+      if (!IsIconic(panel)) {
         if (Visible) Hide();
+        knockStep = -1;
         return;
       }
       if (!Visible) {
-        if (!moved) PlaceWherePanelWas();
+        if (!moved) StandAtTheBottomRight();
         Show();
-        Draw(open);
+        Draw(frames[0]);
         ticks = 0;
+        // Away already when the panel was minimized: knock after the full wait
+        nextKnock = DateTime.Now.AddSeconds(Math.Max(0, idleLimitSeconds - IdleSeconds()));
+      }
+      ticks++;
+      int idle = IdleSeconds();
+
+      if (knockStep >= 0) {
+        // Back at the mouse or keyboard: stop knocking at once
+        if (idle < 1) { knockStep = -1; Draw(frames[0]); return; }
+        int frame = KnockFrames[knockStep];
+        Draw(frames[frame]);
+        if (frame == 3) PlayKnock();
+        knockStep++;
+        if (knockStep >= KnockFrames.Length) { knockStep = -1; Draw(frames[0]); }
+        return;
+      }
+      if (idle >= idleLimitSeconds && DateTime.Now >= nextKnock) {
+        knockStep = 0;
+        nextKnock = DateTime.Now.AddSeconds(KnockAgainSeconds);
+        return;
       }
       // A blink every 4 seconds
-      ticks++;
-      if (ticks % 16 == 0) Draw(blink);
-      else if (ticks % 16 == 1) Draw(open);
+      if (ticks % 16 == 0) Draw(frames[1]);
+      else if (ticks % 16 == 1) Draw(frames[0]);
     }
 
-    void PlaceWherePanelWas() {
-      Rectangle area = Screen.FromPoint(new Point(panelRect.Right - 1, panelRect.Top)).WorkingArea;
-      int x = panelRect.Right > panelRect.Left ? panelRect.Right - Width : area.Right - Width - 16;
-      int y = panelRect.Right > panelRect.Left ? panelRect.Top : area.Top + 16;
-      Location = new Point(
-        Math.Max(area.Left, Math.Min(x, area.Right - Width)),
-        Math.Max(area.Top, Math.Min(y, area.Bottom - Height)));
+    void PlayKnock() {
+      if (knock == null) return;
+      try { knock.Play(); } catch (Exception) { }  // no sound device: knock silently
+    }
+
+    // Standing on the taskbar at the bottom right of the screen the panel was on
+    void StandAtTheBottomRight() {
+      Rectangle area = Screen.FromHandle(panel).WorkingArea;
+      Location = new Point(area.Right - Width - 24, area.Bottom - Height);
     }
 
     void OpenPanel() {
+      knockStep = -1;
       ShowWindow(panel, 9); // SW_RESTORE
       SetForegroundWindow(panel);
       Hide();
@@ -142,23 +189,31 @@ namespace HireAce {
       }
     }
 
-    static Bitmap LoadScaled(string path, int px) {
-      Bitmap scaled = new Bitmap(px, px);
-      using (Image source = Image.FromFile(path))
-      using (Graphics g = Graphics.FromImage(scaled)) {
-        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        g.DrawImage(source, 0, 0, px, px);
+    static Bitmap LoadScaled(string path, int height) {
+      using (Image source = Image.FromFile(path)) {
+        int width = height * source.Width / source.Height;
+        Bitmap scaled = new Bitmap(width, height);
+        using (Graphics g = Graphics.FromImage(scaled)) {
+          g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+          g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+          g.DrawImage(source, 0, 0, width, height);
+        }
+        return scaled;
       }
-      return scaled;
     }
 
-    public static void Run(IntPtr panel, string openPng, string blinkPng) {
+    public static void Run(IntPtr panel, string folder, double idleMinutes) {
       SetProcessDPIAware();
       Application.EnableVisualStyles();
-      int px;
-      using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) { px = (int)(72 * g.DpiX / 96); }
-      Bubble bubble = new Bubble(panel, LoadScaled(openPng, px), LoadScaled(blinkPng, px));
+      int height;
+      using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) { height = (int)(160 * g.DpiX / 96); }
+      string[] names = { "avatar.png", "avatar-blink.png", "avatar-knock1.png", "avatar-knock2.png" };
+      Bitmap[] frames = new Bitmap[names.Length];
+      for (int i = 0; i < names.Length; i++) frames[i] = LoadScaled(System.IO.Path.Combine(folder, names[i]), height);
+      SoundPlayer knock = null;
+      string sound = System.IO.Path.Combine(folder, "knock.wav");
+      if (System.IO.File.Exists(sound)) { knock = new SoundPlayer(sound); knock.Load(); }
+      Bubble bubble = new Bubble(panel, frames, knock, idleMinutes);
       bubble.CreateControl();
       Application.Run(new ApplicationContext());
     }
@@ -166,5 +221,4 @@ namespace HireAce {
 }
 '@
 
-$assets = Join-Path $PSScriptRoot 'assets'
-[HireAce.Bubble]::Run([IntPtr]$Panel, (Join-Path $assets 'bubble.png'), (Join-Path $assets 'bubble-blink.png'))
+[HireAce.Bubble]::Run([IntPtr]$Panel, (Join-Path $PSScriptRoot 'assets'), $IdleMinutes)
