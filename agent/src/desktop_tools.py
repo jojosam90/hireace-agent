@@ -238,7 +238,8 @@ class DesktopTools:
         Checks every tab, not only the one each window is showing.
 
         Args:
-            text: Part of the tab's name, e.g. "Gmail" or "Inbox".
+            text: Part of the tab's name, e.g. "Gmail" or "Inbox". Minimized browser
+                windows are checked too. Never opens a browser or a tab.
         """
         return await self._run(context, "find_browser_tab", {"text": text}, show=True)
 

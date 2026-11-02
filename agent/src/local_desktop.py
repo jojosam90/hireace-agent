@@ -412,6 +412,25 @@ async def settled_browser_text(
     return page
 
 
+SW_SHOWNOACTIVATE = 4
+SW_SHOWMINNOACTIVE = 7
+
+
+def is_minimized(hwnd: int) -> bool:
+    if sys.platform != "win32":
+        return False
+    import ctypes
+
+    return bool(ctypes.windll.user32.IsIconic(hwnd))
+
+
+def show_window(hwnd: int, command: int) -> None:
+    if sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.user32.ShowWindow(hwnd, command)
+
+
 def focus_window_handle(hwnd: int) -> bool:
     """Bring a window to the front by its handle."""
     if sys.platform != "win32":
@@ -538,12 +557,15 @@ class LocalDesktop:
         self._check_stopped()
         if not text.strip():
             raise DesktopError("Say what to look for in the tab names, e.g. Gmail.")
+        wanted = text.strip().casefold()
         tabs = await asyncio.to_thread(browser_tabs, text.strip())
+        if not tabs["selected"]:
+            tabs = await self._look_in_minimized(text.strip(), wanted, tabs)
         matches = [
             {"browser": w["browser"], "tab": tab}
             for w in tabs["windows"]
             for tab in w["tabs"]
-            if text.strip().casefold() in tab.casefold()
+            if wanted in tab.casefold()
         ]
         selected = tabs["selected"]
         if selected:
@@ -559,6 +581,36 @@ class LocalDesktop:
             "matching_tabs": matches,
             "browser_windows_checked": len(tabs["windows"]),
         }
+
+    @staticmethod
+    async def _look_in_minimized(text: str, wanted: str, tabs: dict) -> dict:
+        """A minimized browser window hides its tab strip from Windows (only items
+        inside the page are listed), but its title still names the active tab."""
+        for window in tabs["windows"]:
+            title = window.get("title") or ""
+            if wanted in title.casefold():
+                selected = {
+                    "browser": window["browser"],
+                    "window": window["window"],
+                    "tab": title,
+                }
+                return {**tabs, "selected": selected}
+        # Maybe a background tab: restore them without taking the focus, look again,
+        # and put back the ones it is not in
+        hidden = [
+            int(w["window"]) for w in tabs["windows"] if is_minimized(int(w["window"]))
+        ]
+        if not hidden:
+            return tabs
+        for handle in hidden:
+            show_window(handle, SW_SHOWNOACTIVATE)
+        await asyncio.sleep(0.6)
+        tabs = await asyncio.to_thread(browser_tabs, text)
+        chosen = int(tabs["selected"]["window"]) if tabs["selected"] else None
+        for handle in hidden:
+            if handle != chosen:
+                show_window(handle, SW_SHOWMINNOACTIVE)
+        return tabs
 
     async def open_browser_item(self, text: str) -> dict:
         """Double-click a list row in a browser window (e.g. an email in the Gmail

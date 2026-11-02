@@ -79,3 +79,77 @@ def test_empty_query_and_unknown_kind_are_errors(tree):
 def test_out_of_time_reports_an_incomplete_search(tree):
     result = find_files("acme", [tree], time_budget=-1)
     assert result["searched_everywhere"] is False
+
+
+async def test_a_minimized_browser_is_looked_in_and_put_back(monkeypatch):
+    import local_desktop
+
+    shown = []
+    state = {"restored": False}
+
+    def tabs(_text):
+        gmail = state["restored"]
+        return {
+            "windows": [
+                {
+                    "browser": "msedge",
+                    "window": 1,
+                    "tabs": ["Inbox - a@b.c - Gmail"] if gmail else [],
+                },
+                {"browser": "chrome", "window": 2, "tabs": ["Other"] if gmail else []},
+            ],
+            "selected": {
+                "browser": "msedge",
+                "window": 1,
+                "tab": "Inbox - a@b.c - Gmail",
+            }
+            if gmail
+            else None,
+        }
+
+    def show(handle, command):
+        shown.append((handle, command))
+        state["restored"] = True
+
+    monkeypatch.setattr(local_desktop, "browser_tabs", tabs)
+    monkeypatch.setattr(local_desktop, "is_minimized", lambda _handle: True)
+    monkeypatch.setattr(local_desktop, "show_window", show)
+    monkeypatch.setattr(local_desktop, "focus_window_handle", lambda _handle: True)
+
+    result = await local_desktop.LocalDesktop().find_browser_tab("Gmail")
+
+    assert result["found"] and result["showing"]["browser"] == "msedge"
+    assert (1, local_desktop.SW_SHOWMINNOACTIVE) not in shown  # the Gmail one stays up
+    assert (2, local_desktop.SW_SHOWMINNOACTIVE) in shown  # the other goes back
+
+
+async def test_a_minimized_browser_showing_gmail_is_found_by_its_title(monkeypatch):
+    import local_desktop
+
+    shown = []
+    focused = []
+    monkeypatch.setattr(
+        local_desktop,
+        "browser_tabs",
+        lambda _text: {
+            "windows": [
+                {
+                    "browser": "msedge",
+                    "window": 1,
+                    # Minimized: items inside the page, not the browser's tabs
+                    "title": "Inbox (1) - a@b.c - Gmail and 2 more pages - Microsoft Edge",
+                    "tabs": ["Primary", "Promotions"],
+                }
+            ],
+            "selected": None,
+        },
+    )
+    monkeypatch.setattr(local_desktop, "is_minimized", lambda _handle: True)
+    monkeypatch.setattr(local_desktop, "show_window", lambda *args: shown.append(args))
+    monkeypatch.setattr(local_desktop, "focus_window_handle", focused.append)
+
+    result = await local_desktop.LocalDesktop().find_browser_tab("Gmail")
+
+    assert result["found"] and result["showing"]["browser"] == "msedge"
+    assert focused == [1]  # brought to the front
+    assert shown == []  # no need to restore windows to look in them

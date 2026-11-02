@@ -20,6 +20,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
+from urllib.parse import urlparse
 
 from aiohttp import web
 from dotenv import load_dotenv
@@ -85,6 +86,18 @@ ALWAYS_ASK = {
     "office_save",
     "office_save_as",
 }
+
+
+# Gmail is never opened: it is looked for in the browsers that are already open
+_GMAIL_HOSTS = {"mail.google.com", "gmail.com", "www.gmail.com"}
+GMAIL_NOT_OPEN = (
+    "Gmail is not open in any browser on this PC, and no browser was opened. Ask the "
+    "user to open Gmail in Chrome or Edge and sign in, then look again when they say."
+)
+
+
+def _is_gmail(url) -> bool:
+    return urlparse(str(url or "").strip()).hostname in _GMAIL_HOSTS
 
 
 def _always_asks(action: str, args: dict) -> bool:
@@ -223,6 +236,8 @@ class Gatekeeper:
             return {"status": "error", "reason": "Desktop control is not enabled."}
         if action in OFFICE_ACTIONS and self._office is None:
             return {"status": "error", "reason": "Office control is not enabled."}
+        if action in ("open_url", "new_tab") and _is_gmail(args.get("url")):
+            return await self._show_open_gmail(session, action, args)
         if action in GMAIL_ACTIONS and self.emailer is None:
             return {"status": "error", "reason": "Email is not enabled."}
         # Checked before asking: the user is never asked to approve an email that
@@ -277,6 +292,27 @@ class Gatekeeper:
             }
 
         return await self._execute(action, args)
+
+    async def _show_open_gmail(self, session: str, action: str, args: dict) -> dict:
+        """Asked to open Gmail: show the tab already open in a browser, or say there
+        is none. No browser and no tab is ever opened for it."""
+        found = None
+        if self._desktop is not None:
+            try:
+                found = await self._desktop.find_browser_tab("Gmail")
+            except DesktopError as exc:
+                return {"status": "error", "reason": str(exc)}
+        opened = bool(found and found.get("found"))
+        self._audit(
+            session,
+            action,
+            args,
+            "allow" if opened else "denied",
+            "Gmail shown where it is open" if opened else "Gmail is not open anywhere",
+        )
+        if not opened:
+            return {"status": "error", "reason": GMAIL_NOT_OPEN}
+        return {"status": "done", "result": {**found, "already_open": True}}
 
     async def resolve(self, approval_id: str, *, approve: bool, channel: str) -> dict:
         approval = self._approvals.get(approval_id)

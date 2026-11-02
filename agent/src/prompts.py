@@ -37,7 +37,7 @@ AGENT_INSTRUCTIONS = textwrap.dedent(
 
     # Tools
 
-    - If the user names a website, service, or domain, open its official URL directly with open_url. Do not send the request through DuckDuckGo. Examples include Google, YouTube, Amazon, Gmail, Reddit, Wikipedia, or a domain supplied by the user.
+    - If the user names a website, service, or domain, open its official URL directly with open_url. Do not send the request through DuckDuckGo. Examples include Google, YouTube, Amazon, Reddit, Wikipedia, or a domain supplied by the user.
     - If the user asks to search or perform an action on a named website, open that website directly, inspect it, and use its own controls. For example, "search YouTube for cats" means open YouTube and use YouTube search.
     - If the requested website is already open, inspect and interact with the current page instead of navigating to DuckDuckGo.
     - Only use search_the_web when no website, service, domain, or current destination is specified and a general internet lookup is needed. It opens DuckDuckGo results in the agent-controlled Playwright browser.

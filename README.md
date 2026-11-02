@@ -166,7 +166,7 @@ Voice commands, in any wording:
 |---|---|
 | "Open the browser" / "close the browser" | Opens / closes its Chrome window |
 | "Open youtube.com", "search the web for ..." | Browses in its Chrome window |
-| "Open Gmail" | Opens Gmail in its Chrome window |
+| "Open Gmail" | Shows the Gmail tab already open in any browser, minimized ones too; if there is none it asks you to open it, and never opens a browser |
 | "Open Excel / Word / PowerPoint / Outlook" | Opens the desktop app |
 | "Find my Acme proposal and open it" | Searches Desktop, Documents, Downloads, OneDrive and other drives, then opens the file (asks which one if several match) |
 | "Look at my screen" | Takes a screenshot and describes it |

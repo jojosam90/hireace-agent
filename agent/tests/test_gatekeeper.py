@@ -675,3 +675,60 @@ async def test_gmail_health_for_the_settings_bar(http, gmail):
     gmail.state = "signed_out"
     health = await (await http.get("/v1/gmail/health", headers=TOKEN)).json()
     assert not health["connected"] and health["accounts"] == []
+
+
+# --- Gmail is looked for, never opened -----------------------------------------
+
+
+class GmailTabs:
+    def __init__(self, found: bool) -> None:
+        self.found = found
+        self.looked_for: list[str] = []
+
+    async def find_browser_tab(self, text: str) -> dict:
+        self.looked_for.append(text)
+        return {"found": self.found, "showing": {"browser": "msedge", "tab": "Gmail"}}
+
+
+@pytest.mark.parametrize(
+    ("action", "url"),
+    [
+        ("open_url", "https://mail.google.com"),
+        ("open_url", "https://mail.google.com/mail/u/0/#inbox"),
+        ("open_url", "https://gmail.com"),
+        ("new_tab", "https://www.gmail.com/"),
+    ],
+)
+async def test_asking_to_open_gmail_shows_the_open_tab_and_opens_nothing(
+    audit_path, action, url
+):
+    browser = FakeBrowser()
+    tabs = GmailTabs(found=True)
+    gk = Gatekeeper(browser, desktop=tabs, audit_path=audit_path)
+
+    result = await gk.submit("c", action, {"url": url})
+
+    assert result["status"] == "done" and result["result"]["already_open"]
+    assert tabs.looked_for == ["Gmail"]
+    assert browser.calls == []  # the browser was not touched
+
+
+async def test_gmail_open_nowhere_is_reported_and_no_browser_opens(audit_path):
+    browser = FakeBrowser()
+    gk = Gatekeeper(browser, desktop=GmailTabs(found=False), audit_path=audit_path)
+
+    result = await gk.submit("c", "open_url", {"url": "https://mail.google.com"})
+
+    assert result["status"] == "error" and "no browser was opened" in result["reason"]
+    assert browser.calls == []
+
+
+async def test_other_websites_still_open(audit_path):
+    browser = FakeBrowser()
+    tabs = GmailTabs(found=True)
+    gk = Gatekeeper(browser, desktop=tabs, audit_path=audit_path)
+
+    await gk.submit("c", "open_url", {"url": "https://www.google.com"})
+
+    assert tabs.looked_for == []
+    assert browser.calls  # opened as usual
