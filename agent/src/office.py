@@ -135,6 +135,16 @@ class Office:
         item = documents(match)
         (item.Windows(1) if app == "powerpoint" else item).Activate()
 
+    def _for_editing(self, app: str, document: str = ""):
+        """The running app, about to be edited. Nothing may reach the file before the
+        user says save: AutoSave (files on OneDrive) would write every edit at once."""
+        application = self._app(app, document)
+        with _suppress_com():
+            active = self._active_document(application, app)
+            if active.AutoSaveOn:
+                active.AutoSaveOn = False
+        return application
+
     def _office_read(self, app: str, sheet: str = "", document: str = "") -> dict:
         return {
             "word": self._word_read,
@@ -167,7 +177,7 @@ class Office:
             raise OfficeError(f"Unknown app {app!r}; use word, excel or powerpoint.")
         if op not in ops:
             raise OfficeError(f"{app} can do: {', '.join(ops)}.")
-        application = self._app(app, document)
+        application = self._for_editing(app, document)
         doc = None
         if app == "word":
             doc = self._word_doc(application)
@@ -292,7 +302,7 @@ class Office:
         insert_after: bool = False,
         document: str = "",
     ) -> dict:
-        application = self._app("word", document)
+        application = self._for_editing("word", document)
         doc = self._word_doc(application)
         doc.TrackRevisions = True  # the user sees every change as a tracked change
         if find:
@@ -372,10 +382,17 @@ class Office:
         return {"showing": f"{ws.Name}!{_address(rng)}"}
 
     def _excel_set_cells(
-        self, cells: dict, sheet: str = "", document: str = ""
+        self,
+        cells: dict,
+        sheet: str = "",
+        document: str = "",
+        replace_formula: bool = False,
     ) -> dict:
-        application = self._app("excel", document)
+        application = self._for_editing("excel", document)
         _, ws = self._excel_sheet(application, sheet)
+        for address, value in cells.items():
+            if not str(value).startswith("=") and not replace_formula:
+                _refuse_formula(ws.Range(address))
         changed = []
         for address, value in cells.items():
             rng = ws.Range(address)
@@ -389,6 +406,57 @@ class Office:
         if changed:
             application.Goto(ws.Range(changed[0]), True)
         return {"sheet": ws.Name, "changed": changed, "highlighted": True}
+
+    def _excel_replace(
+        self,
+        old: str,
+        new: str,
+        cell: str = "",
+        sheet: str = "",
+        document: str = "",
+        every_match: bool = False,
+        replace_formula: bool = False,
+    ) -> dict:
+        """Change a value where it is: only that cell, its format left as it was (no
+        highlight: a customer's quotation must not turn yellow)."""
+        application = self._for_editing("excel", document)
+        _, ws = self._excel_sheet(application, sheet)
+        if cell:
+            target = ws.Range(cell)
+            if target.Count > 1:
+                target = target.MergeArea if target.MergeCells else target
+            target = target.Cells(1, 1)
+            if not _same_value(target.Value, old):
+                raise OfficeError(
+                    f"{_address(target)} holds {_shown(target.Value)}, not {old!r}. "
+                    "Nothing was changed: check with the user."
+                )
+            targets = [target]
+        else:
+            targets = _cells_holding(ws, old)
+            if not targets:
+                raise OfficeError(
+                    f"No cell on {ws.Name} holds {old!r}. Nothing was changed: read the "
+                    "sheet again or check with the user."
+                )
+            if len(targets) > 1 and not every_match:
+                where = ", ".join(_address(t) for t in targets[:12])
+                raise OfficeError(
+                    f"{old!r} is in {len(targets)} cells: {where}. Nothing was changed: "
+                    "ask the user which one, then give cell (or every_match if all)."
+                )
+        if not replace_formula:
+            for target in targets:
+                _refuse_formula(target)
+        changed = []
+        for target in targets:
+            before = _plain(target.Value)
+            _write_like(target, new)
+            changed.append(
+                {"cell": _address(target), "old": before, "new": _plain(target.Value)}
+            )
+        application.Goto(targets[0], True)
+        return {"sheet": ws.Name, "changed": changed, "saved": False}
 
     # --- PowerPoint ---------------------------------------------------------------
 
@@ -457,7 +525,7 @@ class Office:
         replace_with: str = "",
         document: str = "",
     ) -> dict:
-        application = self._app("powerpoint", document)
+        application = self._for_editing("powerpoint", document)
         pres = self._presentation(application)
         if not 1 <= slide <= pres.Slides.Count:
             raise OfficeError(
@@ -538,6 +606,75 @@ def _highlight(text_range) -> None:
 
 def _address(rng) -> str:
     return rng.Address.replace("$", "")  # "$A$1:$F$20" -> "A1:F20"
+
+
+def _as_number(value) -> float | None:
+    """A value as a number: "1,000", "$50.00" and 150 count; "12 units" does not."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    cleaned = re.sub(r"[,\s]|^[$€£¥]|^[A-Za-z]{1,3}\$?(?=\d)", "", str(value))
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def _same_value(stored, wanted) -> bool:
+    if stored is None:
+        return not str(wanted).strip()
+    number, other = _as_number(stored), _as_number(wanted)
+    if number is not None and other is not None:
+        return abs(number - other) < 1e-9
+    return (
+        " ".join(str(stored).split()).casefold()
+        == " ".join(str(wanted).split()).casefold()
+    )
+
+
+def _shown(value) -> str:
+    return "nothing" if value is None else repr(_plain(value))
+
+
+def _cells_holding(ws, wanted) -> list:
+    """Every cell of the sheet showing this value (merged cells once)."""
+    used = ws.UsedRange
+    values = used.Value
+    if not isinstance(values, tuple):
+        values = ((values,),)
+    found = []
+    for r, row in enumerate(values, 1):
+        for c, value in enumerate(row, 1):
+            if value is not None and _same_value(value, wanted):
+                found.append(used.Cells(r, c))
+    return found
+
+
+def _refuse_formula(cell) -> None:
+    """Typing over a formula silently breaks the sheet's calculations."""
+    formula = str(cell.Formula)
+    if formula.startswith("="):
+        raise OfficeError(
+            f"{_address(cell)} is calculated by the formula {formula}, so it updates by "
+            "itself. Nothing was changed: change the cells it uses, or ask the user "
+            "whether to replace the formula (replace_formula)."
+        )
+
+
+def _write_like(cell, new: str) -> None:
+    """Write a value the way the cell holds its value now: a number stays a number
+    ("1,000" and "$50" included, in the cell's own format), text stays text ("007")."""
+    text = str(new)
+    if text.startswith("="):
+        cell.Formula = text
+    elif isinstance(cell.Value, str):
+        cell.Value = ("'" + text) if _as_number(text) is not None else text
+    else:
+        number = _as_number(text)
+        cell.Value = (
+            text if number is None else (int(number) if number.is_integer() else number)
+        )
 
 
 def _number_or_text(text: str):

@@ -304,6 +304,15 @@ def make(args: dict, *, live: bool = True) -> dict:
     time, and left open unsaved; save() saves it once the user approves. Otherwise
     (tests, scripts): filled in a hidden Excel and saved with its PDF at once.
     """
+    # Rebuilding closes the open draft and loses anything changed in it by hand
+    replace_draft = args.pop("replace_draft", False)
+    if live and _open_drafts() and not replace_draft:
+        raise QuoteError(
+            "A quotation draft is already open and nothing has been changed. To change "
+            "a value in it use excel_replace, in that same cell. Only to add or remove "
+            "products: ask the user, as starting again loses changes made in the draft, "
+            "then call this with replace_draft."
+        )
     folder = output_dir()
     folder.mkdir(parents=True, exist_ok=True)
     template = template_path()
@@ -374,6 +383,22 @@ def save(quote_number: str = "") -> dict:
             excel.Quit()
     del _drafts[key]
     return {**summary(draft.quote, draft.xlsx, draft.pdf), "status": "saved"}
+
+
+def _open_drafts() -> list[str]:
+    """Drafts still open in Excel: the user may have closed one themselves."""
+    import win32com.client
+
+    try:
+        excel = win32com.client.GetActiveObject("Excel.Application")
+        open_books = {
+            excel.Workbooks(i).Name for i in range(1, excel.Workbooks.Count + 1)
+        }
+    except Exception:
+        open_books = set()
+    for key in [k for k, draft in _drafts.items() if draft.book not in open_books]:
+        del _drafts[key]
+    return list(_drafts)
 
 
 def _draft_key(quote_number: str) -> str:

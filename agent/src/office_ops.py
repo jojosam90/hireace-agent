@@ -676,7 +676,7 @@ def close(app: str, document, save: str) -> dict:
     name = document.Name
     if not document.Saved and save not in ("yes", "no"):
         raise OfficeError(
-            f"{name} has unsaved changes: ask the user to save them or not."
+            f"{name} has unsaved changes and is still open: ask the user: Save the changes, yes or no? Then call this again with their answer."
         )
     if save == "yes":
         document.Save()

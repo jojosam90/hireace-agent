@@ -63,6 +63,7 @@ OFFICE_ACTIONS = {
     "word_edit",
     "excel_set_cells",
     "ppt_edit",
+    "excel_replace",
     "office_save",
     "office_do",
     "office_new",
@@ -77,7 +78,13 @@ GMAIL_ACTIONS = {"send_email", "send_quotation"}
 
 # Always asked, even after the user approved something else in the call: each
 # quotation is approved before it is saved, and every email before it is sent
-ALWAYS_ASK = {"save_quotation", "send_quotation", "send_email"}
+ALWAYS_ASK = {
+    "save_quotation",
+    "send_quotation",
+    "send_email",
+    "office_save",
+    "office_save_as",
+}
 
 
 def _always_asks(action: str, args: dict) -> bool:
@@ -87,8 +94,6 @@ def _always_asks(action: str, args: dict) -> bool:
         return True
     if action == "office_do":
         return args.get("op") == "delete_sheet"
-    if action == "office_save_as":
-        return bool(args.get("overwrite"))
     if action == "office_close":
         return args.get("save") == "no"
     return False
@@ -455,7 +460,8 @@ class Gatekeeper:
             info = await self._office.run("office_path", {"app": app})
             if not info["saved"]:
                 raise EmailError(
-                    f"The {app} file has unsaved changes: save it (office_save) and send again."
+                    f"The {app} file has unsaved changes, which would not be in the email. "
+                    "Nothing was sent: ask the user whether to save it first."
                 )
             files.append(info["path"])
         return await self.emailer.send(attachments=files, **args)

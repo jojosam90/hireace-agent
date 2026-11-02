@@ -53,15 +53,15 @@ async def test_an_earlier_approval_does_not_cover_what_loses_work(tmp_path):
     gk = Gatekeeper(FakeBrowser(), office=office, audit_path=tmp_path / "a.jsonl")
     gk._approved_sessions.add("call")
 
-    plain_copy = await gk.submit(
-        "call", "office_save_as", {"app": "word", "path": "a.docx"}
-    )
     saved_close = await gk.submit(
         "call", "office_close", {"app": "word", "save": "yes"}
     )
-    assert plain_copy["status"] == saved_close["status"] == "done"
+    assert saved_close["status"] == "done"
 
+    # Nothing is saved or lost on an earlier approval
     for action, args in [
+        ("office_save", {"app": "excel"}),
+        ("office_save_as", {"app": "word", "path": "a.docx"}),
         ("office_close", {"app": "word", "save": "no"}),
         ("office_save_as", {"app": "word", "path": "a.docx", "overwrite": True}),
         (
@@ -259,3 +259,161 @@ async def test_powerpoint_for_real(real_office, tmp_path, picture):
     await office.run("office_save_as", {"app": "powerpoint", "path": str(pdf)})
     assert Path(deck).exists() and pdf.read_bytes().startswith(b"%PDF")
     await office.run("office_close", {"app": "powerpoint"})
+
+
+async def test_changing_excel_values_in_their_own_cells_for_real(real_office, tmp_path):
+    office = real_office
+    await office.run("office_new", {"app": "excel"})
+    book = tmp_path / "prices.xlsx"
+    cells = {
+        "A1": "Item",
+        "B1": "Qty",
+        "C1": "Price",
+        "D1": "Amount",
+        "A2": "Gateway",
+        "B2": "150",
+        "C2": "62.6",
+        "D2": "=B2*C2",
+        "A3": "Sensor",
+        "B3": "450",
+        "C3": "62.6",
+        "D3": "=B3*C3",
+    }
+    await office.run("excel_set_cells", {"cells": cells})
+    do = doer(office, "excel")
+    await do("format", range="C2:C3", number_format="#,##0.00", fill="#DDEEFF")
+    await office.run("office_save_as", {"app": "excel", "path": str(book)})
+    on_disk = book.read_bytes()
+
+    def state():
+        import win32com.client
+
+        excel = win32com.client.GetActiveObject("Excel.Application")
+        ws = excel.ActiveSheet
+        return {
+            "saved": bool(excel.ActiveWorkbook.Saved),
+            "alerts": bool(excel.DisplayAlerts),
+            "b2": ws.Range("B2").Value,
+            "d2": ws.Range("D2").Value,
+            "d2_formula": ws.Range("D2").Formula,
+            "c2_format": ws.Range("C2").NumberFormat,
+            "c2_fill": ws.Range("C2").Interior.Color,
+            "c3": ws.Range("C3").Value,
+        }
+
+    async def now():
+        import asyncio
+
+        return await asyncio.get_running_loop().run_in_executor(office._thread, state)
+
+    fill_before = (await now())["c2_fill"]
+
+    # One clear match: changed where it is, and the total follows
+    result = await office.run("excel_replace", {"old": "150", "new": "200"})
+    assert result["changed"] == [{"cell": "B2", "old": 150, "new": 200}]
+    after = await now()
+    assert after["b2"] == 200 and after["d2"] == 200 * 62.6
+    # Nothing saved, and Excel will still ask when the user closes it
+    assert after["saved"] is False and after["alerts"] is True
+    assert book.read_bytes() == on_disk
+
+    # Several matches: nothing changes until the user says which
+    with pytest.raises(OfficeError, match="in 2 cells: C2, C3"):
+        await office.run("excel_replace", {"old": "62.6", "new": "70"})
+    assert (await now())["c3"] == 62.6
+    result = await office.run(
+        "excel_replace", {"old": "62.6", "new": "$1,070.50", "cell": "C2"}
+    )
+    assert result["changed"][0]["new"] == 1070.5
+    after = await now()
+    assert (
+        after["c2_format"] == "#,##0.00" and after["c2_fill"] == fill_before
+    )  # as it was
+    assert after["c3"] == 62.6  # the other one untouched
+
+    # The cell does not hold what the user thinks: no blind edit
+    with pytest.raises(OfficeError, match="B3 holds 450, not '999'"):
+        await office.run("excel_replace", {"old": "999", "new": "1", "cell": "B3"})
+    with pytest.raises(OfficeError, match="No cell"):
+        await office.run("excel_replace", {"old": "nothing like this", "new": "1"})
+
+    # A formula is never typed over by accident
+    formula = (await now())["d2_formula"]
+    with pytest.raises(OfficeError, match="calculated by the formula"):
+        await office.run(
+            "excel_replace", {"old": str((await now())["d2"]), "new": "5", "cell": "D2"}
+        )
+    with pytest.raises(OfficeError, match="calculated by the formula"):
+        await office.run("excel_set_cells", {"cells": {"D2": "5"}})
+    assert (await now())["d2_formula"] == formula
+    assert book.read_bytes() == on_disk
+
+    # Closing asks; only an explicit answer closes it
+    with pytest.raises(OfficeError, match="Save the changes, yes or no"):
+        await office.run("office_close", {"app": "excel"})
+    await office.run("office_close", {"app": "excel", "save": "no"})
+    assert book.read_bytes() == on_disk
+
+
+async def test_changing_a_quantity_in_a_quotation_draft_for_real(
+    real_office, tmp_path, monkeypatch
+):
+    import quotation
+
+    if not quotation.template_path().is_file():
+        pytest.skip("the company's quotation template is not on this PC")
+    office = real_office
+    monkeypatch.setenv("QUOTE_DIR", str(tmp_path))
+    monkeypatch.setenv("QUOTE_PDF_DIR", str(tmp_path))
+    monkeypatch.setenv(
+        "QUOTE_PRICE_LIST",
+        str(Path(__file__).parent.parent / "price_list.example.json"),
+    )
+    monkeypatch.setattr(quotation, "_drafts", {})
+    draft = {
+        "customer": "Seaview Hotel",
+        "items": [
+            {"model": "AC-GW-100", "quantity": 150},
+            {"model": "AC-SW-4", "quantity": 450},
+        ],
+    }
+
+    first = await office.run("make_quotation", dict(draft))
+    assert first["total"] == 150 * 60 + 450 * 50
+
+    def read(cell_label):
+        import win32com.client
+
+        excel = win32com.client.GetActiveObject("Excel.Application")
+        ws = excel.ActiveSheet
+        found = ws.UsedRange.Find(cell_label)
+        return {
+            "total": ws.Cells(found.Row, 5).Value,
+            "saved": bool(excel.ActiveWorkbook.Saved),
+        }
+
+    async def total():
+        import asyncio
+
+        return await asyncio.get_running_loop().run_in_executor(
+            office._thread, lambda: read("SUBTOTAL")
+        )
+
+    # Changed in its own cell: the totals follow, nothing is written to disk
+    result = await office.run("excel_replace", {"old": "150", "new": "200"})
+    assert result["changed"][0]["new"] == 200
+    after = await total()
+    assert after["total"] == 200 * 60 + 450 * 50
+    assert list(tmp_path.iterdir()) == []
+
+    # A change never rebuilds the open draft by accident
+    with pytest.raises(quotation.QuoteError, match="already open"):
+        await office.run("make_quotation", dict(draft))
+    assert (await total())["total"] == 200 * 60 + 450 * 50
+
+    # Closed without saving: nothing on disk, and a new draft can be made
+    await office.run("office_close", {"app": "excel", "save": "no"})
+    assert list(tmp_path.iterdir()) == []
+    await office.run("make_quotation", dict(draft))
+    await office.run("office_close", {"app": "excel", "save": "no"})
+    assert list(tmp_path.iterdir()) == []

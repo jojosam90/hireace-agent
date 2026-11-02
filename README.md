@@ -88,8 +88,10 @@ it works, but not your camera.
 **Word, Excel and PowerPoint:** HireAce controls them directly (`src/office.py`,
 `src/office_ops.py`), not through the mouse: text, formatting, tables, charts, pictures,
 slides, sheets, sorting, slide shows, new files, Save As and PDF. Edits happen freely and
-stay unsaved; saving to a file asks first, and deleting a sheet, closing without saving
-or replacing a file asks every time. Everything else on the PC goes through the real
+stay unsaved (AutoSave is turned off for a file HireAce edits). It never saves by itself:
+every save and Save As asks, as do deleting a sheet and closing without saving. Changing an
+Excel value (`excel_replace`) checks the cell holds the old value, changes only that cell
+and its format stays; several matches or a formula make it ask you instead. Everything else on the PC goes through the real
 mouse and keyboard (PyAutoGUI), with the emergency stop. To test against the real apps
 (close them first): `HIREACE_TEST_OFFICE=1 uv run pytest tests/test_office_ops.py`.
 

@@ -126,6 +126,7 @@ KNOWN_ACTIONS = (
         "open_file",
         "word_edit",
         "excel_set_cells",
+        "excel_replace",
         "ppt_edit",
         "office_save",
         "office_do",
@@ -138,7 +139,7 @@ KNOWN_ACTIONS = (
         "send_quotation",
     }
 )
-OFFICE_EDIT_ACTIONS = {"word_edit", "excel_set_cells", "ppt_edit"}
+OFFICE_EDIT_ACTIONS = {"word_edit", "excel_set_cells", "excel_replace", "ppt_edit"}
 _EMAIL = re.compile(r"[^@\s,;<>]+@[^@\s,;<>]+\.[A-Za-z]{2,}")
 
 # Opening these runs a program or script, not a document

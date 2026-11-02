@@ -38,6 +38,7 @@ class OfficeTools:
             self.office_read,
             self.office_go_to,
             self.word_edit,
+            self.excel_replace,
             self.excel_set_cells,
             self.ppt_edit,
             self.office_save,
@@ -131,6 +132,43 @@ class OfficeTools:
         return await self._run(context, "word_edit", args)
 
     @function_tool()
+    async def excel_replace(
+        self,
+        context: RunContext,
+        old: str,
+        new: str,
+        cell: str = "",
+        sheet: str = "",
+        every_match: bool = False,
+        replace_formula: bool = False,
+        document: str = "",
+    ) -> dict:
+        """Change a value in Excel where it is: "change 150 to 200". Only that cell
+        changes, with its format; nothing is saved. It checks first: if the cell does
+        not hold old, if several cells do, or if the cell is a formula, nothing is
+        changed and you are told: then ask the user, never guess or write elsewhere.
+
+        Args:
+            old: The value now in the cell, as the user said it or office_read showed it.
+            new: The new value.
+            cell: The cell, e.g. "D21", when known. Otherwise old is searched for.
+            sheet: The sheet (default: the active one).
+            every_match: Only if the user asked to change all of them.
+            replace_formula: Only if the user agreed to lose that cell's formula.
+            document: Part of the file name when several files are open.
+        """
+        args = {
+            "old": old,
+            "new": new,
+            "cell": cell,
+            "sheet": sheet,
+            "every_match": every_match,
+            "replace_formula": replace_formula,
+            "document": document,
+        }
+        return await self._run(context, "excel_replace", args)
+
+    @function_tool()
     async def excel_set_cells(
         self,
         context: RunContext,
@@ -138,7 +176,8 @@ class OfficeTools:
         sheet: str = "",
         document: str = "",
     ) -> dict:
-        """Write values or formulas into Excel cells. Changed cells are filled yellow.
+        """Fill empty Excel cells with values or formulas (yellow, to be seen). To
+        change a value already there, use excel_replace. Refuses to type over a formula.
 
         Args:
             cells: Cell address to new value, for example {"B3": "120", "C3": "=B3*2"}.
@@ -191,7 +230,8 @@ class OfficeTools:
     ) -> dict:
         """Save the open Word, Excel or PowerPoint file (overwrites it on disk).
 
-        Only when the user wants the changes saved.
+        Only when the user has just said to save. Never by yourself: not after an edit,
+        before emailing or at the end of a task. The user always approves it on screen.
 
         Args:
             app: "word", "excel" or "powerpoint".
@@ -276,7 +316,8 @@ class OfficeTools:
         document: str = "",
     ) -> dict:
         """Save the open file under a new name or type, or export it as PDF (a PDF
-        leaves the file itself as it was). The user approves first.
+        leaves the file itself as it was). Only when the user asked for it. The user
+        approves it on screen every time.
 
         Args:
             app: "word", "excel" or "powerpoint".
@@ -293,7 +334,8 @@ class OfficeTools:
         self, context: RunContext, app: str, save: str = "", document: str = ""
     ) -> dict:
         """Close one open file (the app stays open). The user approves first. With
-        unsaved changes it refuses until save says what to do: ask the user.
+        unsaved changes it refuses until save says what to do: ask the user "Save the
+        changes: yes or no?" and call it again. Use this to close a file, not close_window.
 
         Args:
             app: "word", "excel" or "powerpoint".
@@ -319,7 +361,7 @@ class OfficeTools:
 
         Write it for the person receiving it, not for the user: never "Sir". The
         greeting ("Hi,"), layout and sign-off are added for you. Save edited
-        documents with office_save first. The user always approves it on screen.
+        documents only if the user agreed to save. The user always approves it on screen.
 
         Args:
             to: The recipients' email addresses: the ones the user gave, or the
@@ -372,11 +414,12 @@ class OfficeTools:
         phone: str = "",
         discount: float = 0.0,
         notes: list[str] | None = None,
+        replace_draft: bool = False,
     ) -> dict:
         """Prepare the quotation draft: open the company template in Excel and fill it
         in on screen while the user watches. The draft stays open, unsaved, for the
-        user to check; save_quotation saves it once they approve. Calling this again
-        replaces the open draft (e.g. after a change).
+        user to check; save_quotation saves it once they approve. To change a value in
+        the open draft use excel_replace: this refuses while a draft is open.
 
         Gives it the next quote number and today's date and works out the totals.
 
@@ -396,6 +439,8 @@ class OfficeTools:
             phone: The customer's phone number from the email, e.g. "60-12 345 6789".
             discount: Discount in SGD, only if the user asked for one.
             notes: Special notes, only if the user asks for some (normally empty).
+            replace_draft: Start the open draft again, to add or remove products, only
+                after the user agreed: it loses any changes made in the draft.
         """
         args = {
             "customer": customer,
@@ -408,6 +453,7 @@ class OfficeTools:
             "phone": phone,
             "discount": discount,
             "notes": notes or [],
+            "replace_draft": replace_draft,
         }
         return await self._run(context, "make_quotation", args)
 
