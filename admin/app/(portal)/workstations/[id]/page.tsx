@@ -226,7 +226,7 @@ export default function WorkstationPage() {
         {history.length === 0 ? (
           <p className="text-muted text-sm">None yet.</p>
         ) : (
-          <ul className="divide-line divide-y text-sm">
+          <ul className="divide-line scroll-thin max-h-80 divide-y overflow-y-auto text-sm">
             {history.map((row) => (
               <li key={row.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5">
                 <span className="min-w-0">

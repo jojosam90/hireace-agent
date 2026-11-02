@@ -14,9 +14,13 @@ import {
 import { useEffect, useRef, type ComponentProps, type ReactNode } from 'react';
 import type { DeviceView } from '@/lib/types';
 
-export function Page({ title, intro, actions, children }: { title: string; intro?: string; actions?: ReactNode; children: ReactNode }) {
+/**
+ * With fill, the page is exactly one screen tall (less the header, bottom bar and
+ * spacing in shell.tsx) and a long list scrolls inside its own card.
+ */
+export function Page({ title, intro, actions, fill, children }: { title: string; intro?: string; actions?: ReactNode; fill?: boolean; children: ReactNode }) {
   return (
-    <>
+    <div className={fill ? 'flex h-[calc(100dvh-188px)] min-h-[420px] flex-col lg:h-[calc(100dvh-4rem)]' : undefined}>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{title}</h1>
@@ -25,7 +29,7 @@ export function Page({ title, intro, actions, children }: { title: string; intro
         {actions}
       </div>
       {children}
-    </>
+    </div>
   );
 }
 

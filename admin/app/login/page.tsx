@@ -3,6 +3,7 @@
 import { Check, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Logo } from '@/components/shell';
+import { SESSION_DAYS } from '@/lib/session';
 
 const POINTS = [
   ['Every workstation at a glance', 'See which PCs are online and whether HireAce is up on each one.'],
@@ -67,11 +68,11 @@ export default function LoginPage() {
       </section>
 
       <section className="flex flex-1 items-center justify-center px-6 py-12">
-        <form onSubmit={submit} className="w-full max-w-md">
-          <h2 className="text-3xl font-extrabold tracking-tight">Welcome back</h2>
-          <p className="text-muted mt-3">Sign in to manage your HireAce workstations.</p>
+        <form onSubmit={submit} className="w-full max-w-xl">
+          <h2 className="text-4xl font-extrabold tracking-tight">Welcome back</h2>
+          <p className="text-muted mt-4">Log in to manage your HireAce workstations.</p>
 
-          <label htmlFor="username" className="mt-8 block font-semibold">
+          <label htmlFor="username" className="mt-9 block font-semibold">
             Username
           </label>
           <input
@@ -115,11 +116,14 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy}
-            className="bg-brand-600 hover:bg-brand-700 mt-7 flex h-13 w-full items-center justify-center gap-2 rounded-xl font-bold text-white transition-colors disabled:opacity-70"
+            className="bg-brand-600 hover:bg-brand-700 mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-lg font-bold text-white transition-colors disabled:opacity-70"
           >
             {busy && <LoaderCircle className="size-5 animate-spin" aria-hidden />}
-            Sign in
+            Log in
           </button>
+          <p className="text-muted mt-5 text-center text-sm">
+            Your session stays signed in for {SESSION_DAYS} days on this device.
+          </p>
         </form>
       </section>
     </main>

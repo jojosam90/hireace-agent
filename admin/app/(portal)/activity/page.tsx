@@ -12,8 +12,8 @@ export default function ActivityPage() {
   if (!data) return error ? <Problem>{error}</Problem> : <Loading />;
 
   return (
-    <Page title="Activity" intro="Everything done from this portal, who did it, and how it ended. The last 100 events.">
-      <Card>
+    <Page fill title="Activity" intro="Everything done from this portal, who did it, and how it ended. The last 100 events.">
+      <Card className="scroll-thin min-h-0 flex-initial overflow-y-auto">
         {data.activity.length === 0 ? (
           <Empty icon={Activity} title="Nothing yet" />
         ) : (

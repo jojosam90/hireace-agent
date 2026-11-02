@@ -50,6 +50,7 @@ export default function WorkstationsPage() {
 
   return (
     <Page
+      fill
       title="Workstations"
       intro={`Each PC checks in every ${data.heartbeatSeconds} seconds. It shows as offline after ${Math.round(data.offlineAfterSeconds / 60)} minutes of silence.`}
     >
@@ -103,9 +104,10 @@ export default function WorkstationsPage() {
       ) : (
         <>
           {/* Wide screens: a table */}
-          <Card className="hidden overflow-hidden p-0! md:block">
+          {/* Room at the end so the bar for selected PCs never hides the last row */}
+          <Card className={`scroll-thin hidden min-h-0 flex-initial overflow-y-auto md:block ${ids.length ? 'px-0! pt-0! pb-20!' : 'p-0!'}`}>
             <table className="w-full text-sm">
-              <thead className="bg-page text-muted text-left">
+              <thead className="bg-page text-muted sticky top-0 z-10 text-left">
                 <tr>
                   <th className="w-10 px-4 py-3">
                     <input
@@ -169,7 +171,7 @@ export default function WorkstationsPage() {
           </Card>
 
           {/* Phones: cards */}
-          <ul className="space-y-3 md:hidden">
+          <ul className={`scroll-thin min-h-0 flex-initial space-y-3 overflow-y-auto md:hidden ${ids.length ? 'pb-32' : ''}`}>
             {rows.map((device) => (
               <li key={device.id} className="border-line flex gap-3 rounded-2xl border bg-white p-4 shadow-sm">
                 <input

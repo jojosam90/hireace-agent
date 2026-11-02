@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fail, readJson, respond } from '@/lib/api';
 import { login } from '@/lib/auth';
-import { SESSION_COOKIE, SESSION_HOURS, signSession } from '@/lib/session';
+import { SESSION_COOKIE, SESSION_DAYS, signSession } from '@/lib/session';
 
 const REFUSALS = {
   wrong: ['The username or password is not right.', 401],
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       sameSite: 'lax',
       secure: (request.headers.get('x-forwarded-proto') ?? new URL(request.url).protocol).startsWith('https'),
       path: '/',
-      maxAge: SESSION_HOURS * 3600,
+      maxAge: SESSION_DAYS * 86_400,
     });
     return response;
   });

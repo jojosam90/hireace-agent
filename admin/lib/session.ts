@@ -2,7 +2,7 @@
 import { jwtVerify, SignJWT } from 'jose';
 
 export const SESSION_COOKIE = 'hireace_admin';
-export const SESSION_HOURS = 12;
+export const SESSION_DAYS = 7;
 
 const secret = () => new TextEncoder().encode(process.env.SESSION_SECRET ?? '');
 
@@ -11,7 +11,7 @@ export async function signSession(username: string): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(username)
     .setIssuedAt()
-    .setExpirationTime(`${SESSION_HOURS}h`)
+    .setExpirationTime(`${SESSION_DAYS}d`)
     .sign(secret());
 }
 
