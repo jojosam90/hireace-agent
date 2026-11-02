@@ -34,16 +34,28 @@ if (-not (Test-Path $nameFile)) {
 $code = if ($NoAccessCode) { '' } elseif ($AccessCode) { $AccessCode } else {
   Read-Host 'Access code for the site (the phone asks for it once; leave empty for no code)'
 }
+# The Vercel CLI writes progress and hints to its error stream. Windows PowerShell
+# turns that into errors (which stop this script), so its output is read as plain
+# text here and success is judged by its exit code.
+function Invoke-Vercel {
+  $ErrorActionPreference = 'Continue'
+  $input | & vercel @args 2>&1 | ForEach-Object { "$_" }
+}
+
 Push-Location $web
 try {
   # Its own Vercel project: this code was copied from an earlier project, whose link (and
   # live site) must never be deployed over
   $linked = if (Test-Path '.vercel\project.json') { (Get-Content '.vercel\project.json' -Raw | ConvertFrom-Json).projectName }
-  if ($linked -ne 'hireace-agent') { vercel link --yes --project hireace-agent }
+  if ($linked -ne 'hireace-agent') {
+    Invoke-Vercel link --yes --project hireace-agent | Out-Host
+    if ($LASTEXITCODE) { throw 'vercel link failed' }
+  }
 
   function Set-VercelEnv([string]$name, [string]$value) {
-    vercel env rm $name production --yes 2>$null | Out-Null
-    $value | vercel env add $name production | Out-Null
+    Invoke-Vercel env rm $name production --yes | Out-Null  # fine if it was not set
+    $value | Invoke-Vercel env add $name production | Out-Null
+    if ($LASTEXITCODE) { throw "vercel env add $name failed" }
     Write-Host "set $name"
   }
   $keep = '^(LIVEKIT_URL|LIVEKIT_API_KEY|LIVEKIT_API_SECRET|NEXT_PUBLIC_APP_CONFIG_ENDPOINT|SANDBOX_ID)='
@@ -52,16 +64,16 @@ try {
     Set-VercelEnv $name $value.Trim()
   }
   # No default PC: a phone controls the PC whose phone link it opened
-  vercel env rm AGENT_NAME production --yes 2>$null | Out-Null
+  Invoke-Vercel env rm AGENT_NAME production --yes | Out-Null
   if ($code) {
     Set-VercelEnv 'HIREACE_ACCESS_CODE' $code.Trim()
-    vercel env rm HIREACE_OPEN_ACCESS production --yes 2>$null | Out-Null
+    Invoke-Vercel env rm HIREACE_OPEN_ACCESS production --yes | Out-Null
   } else {
     Set-VercelEnv 'HIREACE_OPEN_ACCESS' 'true'
-    vercel env rm HIREACE_ACCESS_CODE production --yes 2>$null | Out-Null
+    Invoke-Vercel env rm HIREACE_ACCESS_CODE production --yes | Out-Null
   }
 
-  $output = vercel deploy --prod 2>&1 | ForEach-Object { "$_" } | Tee-Object -Variable lines
+  $output = Invoke-Vercel deploy --prod | Tee-Object -Variable lines
   $output | Out-Host
   if ($LASTEXITCODE) { throw 'vercel deploy failed' }
 
