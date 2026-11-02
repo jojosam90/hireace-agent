@@ -10,12 +10,12 @@ interface GmailHealth {
   can_send: boolean;
 }
 
-// Reading every browser's tabs costs about a second of CPU on the PC
-const CHECK_EVERY_MS = 60_000;
+const CHECK_EVERY_MS = 10_000;
 
 /**
  * A small bar on the PC's panel: is Gmail signed in, in any browser (Chrome, Edge...)?
- * Checked once a minute while the panel is showing, and when it comes back to the front.
+ * Checked every 10 seconds, at once when the user comes back to the panel, and not
+ * while it is minimized (each check costs the PC about a second of work).
  */
 export function GmailHealthBar() {
   const { t } = useUiLanguage();
@@ -42,10 +42,12 @@ export function GmailHealthBar() {
     check();
     const timer = setInterval(check, CHECK_EVERY_MS);
     document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
     return () => {
       stopped = true;
       clearInterval(timer);
       document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', check);
     };
   }, []);
 
@@ -67,12 +69,12 @@ export function GmailHealthBar() {
       className="mt-3 w-full max-w-xs rounded-xl border px-3 py-2 text-left text-xs"
       title={text}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2">
         <span
-          className={`size-2 shrink-0 rounded-full ${connected ? 'bg-emerald-500' : 'bg-zinc-400'}`}
+          className={`mt-1 size-2 shrink-0 rounded-full ${connected ? 'bg-emerald-500' : 'bg-zinc-400'}`}
           aria-hidden
         />
-        <span className="truncate font-medium">{text}</span>
+        <span className="min-w-0 font-medium break-words">{text}</span>
       </div>
       {connected && !health?.can_send && (
         <p className="text-muted-foreground mt-1 pl-4">{t('gmailBarCannotSend')}</p>

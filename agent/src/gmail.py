@@ -54,7 +54,8 @@ _BROWSER_NAMES = {
     "brave": "Brave",
     "opera": "Opera",
 }
-HEALTH_CACHE_S = 15  # reading every browser's tabs takes about a second of CPU
+# Reading every browser's tabs takes about a second; the panel asks every 10 s
+HEALTH_CACHE_S = 8
 
 
 class GmailError(Exception):
