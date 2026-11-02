@@ -3,9 +3,10 @@ import { fromThisPc, gatekeeperConfigured, gatekeeperFetch } from '@/lib/gatekee
 
 export const revalidate = 0;
 
-const ACTIONS = new Set(['open', 'test']);
+const ACTIONS = new Set(['open', 'show', 'test']);
 
-// Open Gmail in HireAce's browser, or send a test email (on the PC itself only)
+// Open a Gmail link, go to the Gmail tab already open, or send a test email (on the PC
+// itself only)
 export async function POST(req: Request, { params }: { params: Promise<{ action: string }> }) {
   const { action } = await params;
   if (!ACTIONS.has(action)) {

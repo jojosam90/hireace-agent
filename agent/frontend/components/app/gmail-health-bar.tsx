@@ -14,12 +14,15 @@ const CHECK_EVERY_MS = 10_000;
 /**
  * A small bar on the PC's panel: is Gmail signed in, in any browser (Chrome, Edge...)?
  * Checked every 10 seconds, at once when the user comes back to the panel, and not
- * while it is minimized (each check costs the PC about a second of work).
+ * while it is minimized (each check costs the PC about a second of work). Clicking it
+ * goes to the Gmail already open; it never opens a browser.
  */
 export function GmailHealthBar() {
   const { t } = useUiLanguage();
   const [health, setHealth] = useState<GmailHealth | null>(null);
   const [failed, setFailed] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [going, setGoing] = useState(false);
 
   useEffect(() => {
     if (!['localhost', '127.0.0.1'].includes(window.location.hostname)) return;
@@ -33,6 +36,7 @@ export function GmailHealthBar() {
         if (!stopped) {
           setHealth(next);
           setFailed(false);
+          setNotFound(false);
         }
       } catch {
         if (!stopped) setFailed(true);
@@ -52,29 +56,56 @@ export function GmailHealthBar() {
 
   if (!health && !failed) return null;
 
+  const goToGmail = async () => {
+    setGoing(true);
+    try {
+      const res = await fetch('/api/gmail/show', { method: 'POST' });
+      setNotFound(!res.ok || (await res.json()).status !== 'done');
+    } catch {
+      setNotFound(true);
+    } finally {
+      setGoing(false);
+    }
+  };
+
   const connected = !failed && health?.connected;
   const where = (health?.accounts ?? []).map((a) => `${a.browser} · ${a.email}`).join(', ');
-  const text = connected
-    ? where
-      ? t('gmailBarConnectedIn', { where })
-      : t('gmailBarConnected')
-    : failed || !health?.checked
-      ? t('gmailBarUnknown')
-      : t('gmailBarNotConnected');
-
-  return (
-    <div
-      role="status"
-      className="mt-3 w-full max-w-xs rounded-xl border px-3 py-2 text-left text-xs"
-      title={text}
-    >
-      <div className="flex items-start gap-2">
-        <span
-          className={`mt-1 size-2 shrink-0 rounded-full ${connected ? 'bg-emerald-500' : 'bg-zinc-400'}`}
-          aria-hidden
-        />
-        <span className="min-w-0 font-medium break-words">{text}</span>
-      </div>
+  const text = notFound
+    ? t('gmailBarNotFound')
+    : connected
+      ? where
+        ? t('gmailBarConnectedIn', { where })
+        : t('gmailBarConnected')
+      : failed || !health?.checked
+        ? t('gmailBarUnknown')
+        : t('gmailBarNotConnected');
+  const box = 'mt-3 w-full max-w-xs rounded-xl border px-3 py-2 text-left text-xs';
+  const content = (
+    <div className="flex items-start gap-2">
+      <span
+        className={`mt-1 size-2 shrink-0 rounded-full ${connected && !notFound ? 'bg-emerald-500' : 'bg-zinc-400'}`}
+        aria-hidden
+      />
+      <span className="min-w-0 font-medium break-words">{text}</span>
     </div>
+  );
+
+  if (!connected) {
+    return (
+      <div role="status" className={box} title={text}>
+        {content}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={goToGmail}
+      disabled={going}
+      className={`${box} hover:bg-muted cursor-pointer transition-colors disabled:cursor-wait`}
+      title={t('gmailBarGoTo')}
+    >
+      {content}
+    </button>
   );
 }

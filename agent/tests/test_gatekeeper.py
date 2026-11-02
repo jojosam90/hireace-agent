@@ -732,3 +732,27 @@ async def test_other_websites_still_open(audit_path):
 
     assert tabs.looked_for == []
     assert browser.calls  # opened as usual
+
+
+# --- The Gmail bar on the panel goes to the Gmail already open -------------------
+
+
+@pytest.mark.parametrize("found", [True, False])
+async def test_clicking_the_gmail_bar_only_shows_the_open_tab(gmail, audit_path, found):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from emailer import Emailer
+    from gatekeeper import create_app
+
+    browser = FakeBrowser()
+    tabs = GmailTabs(found=found)
+    gk = Gatekeeper(
+        browser, desktop=tabs, emailer=Emailer(gmail), audit_path=audit_path
+    )
+    async with TestClient(TestServer(create_app(gk, "secret"))) as client:
+        assert (await client.post("/v1/gmail/show")).status == 401
+        result = await (await client.post("/v1/gmail/show", headers=TOKEN)).json()
+
+    assert result["status"] == ("done" if found else "error")
+    assert tabs.looked_for == ["Gmail"]
+    assert browser.calls == [] and gmail.opened == 0  # nothing was opened

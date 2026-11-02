@@ -237,7 +237,7 @@ class Gatekeeper:
         if action in OFFICE_ACTIONS and self._office is None:
             return {"status": "error", "reason": "Office control is not enabled."}
         if action in ("open_url", "new_tab") and _is_gmail(args.get("url")):
-            return await self._show_open_gmail(session, action, args)
+            return await self.show_open_gmail(session, action, args)
         if action in GMAIL_ACTIONS and self.emailer is None:
             return {"status": "error", "reason": "Email is not enabled."}
         # Checked before asking: the user is never asked to approve an email that
@@ -293,7 +293,7 @@ class Gatekeeper:
 
         return await self._execute(action, args)
 
-    async def _show_open_gmail(self, session: str, action: str, args: dict) -> dict:
+    async def show_open_gmail(self, session: str, action: str, args: dict) -> dict:
         """Asked to open Gmail: show the tab already open in a browser, or say there
         is none. No browser and no tab is ever opened for it."""
         found = None
@@ -668,6 +668,11 @@ def create_app(
                 {"state": "closed", "email": "", "reason": str(exc)}
             )
 
+    async def gmail_show(_: web.Request) -> web.Response:
+        return web.json_response(
+            await gatekeeper.show_open_gmail("panel", "show_gmail", {})
+        )
+
     async def gmail_test(request: web.Request) -> web.Response:
         gmail()
         to = str((await request.json()).get("to", ""))
@@ -694,6 +699,7 @@ def create_app(
             web.get("/v1/gmail", gmail_status),
             web.get("/v1/gmail/health", gmail_health),
             web.post("/v1/gmail/open", gmail_open),
+            web.post("/v1/gmail/show", gmail_show),
             web.post("/v1/gmail/test", gmail_test),
             web.get("/healthz", health),
         ]
