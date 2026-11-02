@@ -1,0 +1,41 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Logs
+*.log
+# Installer build output (contains API keys)
+dist/
+
+# HireAce license codes: the secret key and the list of issued codes
+installer/license-secret.txt
+installer/issued-licenses.csv
+
+# The company's own price list and quotation template: kept on this PC, never
+# committed (installer/build.ps1 packages them). price_list.example.json shows the shape.
+agent/price_list.json
+agent/templates/quotation.xlsx

@@ -1,0 +1,33 @@
+{
+  "currency": "SGD",
+  "products": [
+    {
+      "model": "AC-GW-100",
+      "item": "Gateway",
+      "description": "System gateway supporting BLE / Wi-Fi",
+      "brand": "Acme",
+      "unit_price": 60.0
+    },
+    {
+      "model": "AC-SW-4",
+      "item": "4-button switch",
+      "description": "4-gang switch with BLE mesh communication",
+      "brand": "Acme",
+      "unit_price": 50.0
+    },
+    {
+      "model": "AC-AC-27",
+      "item": "Air-conditioning gateway",
+      "description": "Connects the room's air conditioning to the system",
+      "brand": "Acme",
+      "unit_price": 200.0
+    },
+    {
+      "model": "AC-PS-24",
+      "item": "Presence sensor",
+      "description": "24 GHz human presence sensor with BLE mesh communication",
+      "brand": "Acme",
+      "unit_price": 100.0
+    }
+  ]
+}
