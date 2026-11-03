@@ -49,6 +49,10 @@ for 30 days from the last use. The device keeps a signed cookie, not the passwor
 or `SESSION_SECRET` changes. Other devices still have to type the password. Do not tick it on a shared PC. Anyone using a
 remembered device can log in as that person, so lock the device; **Forget this device** on the login page ends it.
 
+`ADMIN_PREFILL_PASSWORD` (or `prefillPassword` for an account in `ADMIN_ACCOUNTS`) fills the real password in on every
+device. It is off unless set. It sends the password to anyone who opens the login page, so on a site reachable from the
+internet it means no login at all: use it only on this PC or for a demo.
+
 ## Run it on this PC
 
 ```powershell

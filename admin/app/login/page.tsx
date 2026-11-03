@@ -18,6 +18,8 @@ interface PublicAccount {
   role: string;
   /** This device logged in as them before: no need to type the password */
   remembered: boolean;
+  /** This account's password, if the server is set to fill it in */
+  prefillPassword?: string;
 }
 
 export default function LoginPage() {
@@ -34,14 +36,18 @@ export default function LoginPage() {
   const [error, setError] = useState('');
 
   const chosenAccount = accounts?.find((account) => account.username === username);
-  const saved = Boolean(chosenAccount?.remembered) && !typing;
+  const saved = Boolean(chosenAccount?.remembered) && !typing && !chosenAccount?.prefillPassword;
+  const filledIn = saved || Boolean(chosenAccount?.prefillPassword && password === chosenAccount.prefillPassword);
 
   useEffect(() => {
     fetch('/api/auth/accounts', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data: { accounts: PublicAccount[] }) => {
         setAccounts(data.accounts);
-        if (data.accounts.length === 1) setUsername(data.accounts[0].username);
+        if (data.accounts.length === 1) {
+          setUsername(data.accounts[0].username);
+          setPassword(data.accounts[0].prefillPassword ?? '');
+        }
       })
       .catch(() => setError('Could not reach the server.'));
   }, []);
@@ -49,14 +55,16 @@ export default function LoginPage() {
   // The next step takes the cursor: Log in if the password is filled in, else the password
   useEffect(() => {
     if (!username) return;
-    if (saved) loginButton.current?.focus();
+    if (filledIn) loginButton.current?.focus();
     else passwordField.current?.focus();
+    // Only when the account changes, not while the password is being typed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, saved]);
 
   function choose(account: PublicAccount) {
     setUsername(account.username);
     setTyping(false);
-    setPassword('');
+    setPassword(account.prefillPassword ?? '');
     setError('');
   }
 

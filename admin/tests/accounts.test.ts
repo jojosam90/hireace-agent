@@ -6,7 +6,7 @@ import { resetDbForTests } from '@/lib/db';
 
 const hash = (password: string, salt = 'aa') => `${salt}:${scryptSync(password, salt, 64).toString('hex')}`;
 const NOW = Date.parse('2026-11-15T12:00:00Z');
-const NAMES = ['ADMIN_ACCOUNTS', 'ADMIN_USERNAME', 'ADMIN_PASSWORD_HASH', 'SESSION_SECRET'];
+const NAMES = ['ADMIN_ACCOUNTS', 'ADMIN_USERNAME', 'ADMIN_PASSWORD_HASH', 'ADMIN_PREFILL_PASSWORD', 'SESSION_SECRET'];
 
 beforeEach(() => {
   process.env.ADMIN_DATA_DIR = 'memory://';
@@ -45,6 +45,26 @@ describe('accounts', () => {
     process.env.ADMIN_ACCOUNTS = two();
     expect(JSON.stringify(publicAccounts())).not.toContain('Hash');
     expect(publicAccounts()[0]).toEqual({ username: 'farah', name: 'Farah Lee', role: 'Manager' });
+  });
+
+  it('sends no password unless the server is told to, and then only that one', () => {
+    process.env.ADMIN_ACCOUNTS = two();
+    expect(JSON.stringify(publicAccounts())).not.toContain('prefill');
+
+    process.env.ADMIN_ACCOUNTS = JSON.stringify([
+      { username: 'farah', passwordHash: hash('farah-password'), prefillPassword: 'farah-password' },
+      { username: 'ravi', passwordHash: hash('ravi-password') },
+    ]);
+    const [farah, ravi] = publicAccounts();
+    expect(farah.prefillPassword).toBe('farah-password');
+    expect(ravi.prefillPassword).toBeUndefined();
+
+    delete process.env.ADMIN_ACCOUNTS;
+    process.env.ADMIN_USERNAME = 'admin';
+    process.env.ADMIN_PASSWORD_HASH = hash('admin-password');
+    expect(publicAccounts()[0].prefillPassword).toBeUndefined();
+    process.env.ADMIN_PREFILL_PASSWORD = 'admin-password';
+    expect(publicAccounts()[0].prefillPassword).toBe('admin-password');
   });
 
   it('makes initials from the first and last name', () => {

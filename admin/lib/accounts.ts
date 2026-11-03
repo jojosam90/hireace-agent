@@ -6,6 +6,8 @@ export interface Account {
   name: string;
   role: string;
   passwordHash: string;
+  /** Sent to anyone who opens the login page, to fill the password in: see .env.example */
+  prefillPassword?: string;
 }
 
 export function loadAccounts(): Account[] {
@@ -20,6 +22,7 @@ export function loadAccounts(): Account[] {
           name: String(item.name || item.username),
           role: String(item.role || 'Admin'),
           passwordHash: String(item.passwordHash),
+          ...(item.prefillPassword ? { prefillPassword: String(item.prefillPassword) } : {}),
         }));
       }
     } catch {
@@ -29,12 +32,18 @@ export function loadAccounts(): Account[] {
   const username = process.env.ADMIN_USERNAME;
   const passwordHash = process.env.ADMIN_PASSWORD_HASH;
   if (!username || !passwordHash) return [];
-  return [{ username, name: 'Administrator', role: 'Admin', passwordHash }];
+  const prefillPassword = process.env.ADMIN_PREFILL_PASSWORD;
+  return [{ username, name: 'Administrator', role: 'Admin', passwordHash, ...(prefillPassword ? { prefillPassword } : {}) }];
 }
 
 /** What the login page shows, to anyone: never the password hashes. */
 export function publicAccounts() {
-  return loadAccounts().map(({ username, name, role }) => ({ username, name, role }));
+  return loadAccounts().map(({ username, name, role, prefillPassword }) => ({
+    username,
+    name,
+    role,
+    ...(prefillPassword ? { prefillPassword } : {}),
+  }));
 }
 
 /** "Mei Ling Wong" -> "MW" */
