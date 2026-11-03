@@ -3,7 +3,7 @@ import { SESSION_COOKIE, verifySession } from '@/lib/session';
 
 // Everything needs a signed-in admin, except what workstations and the release script
 // call (they bring their own keys) and the sign-in itself
-const OPEN = ['/login', '/api/auth/login', '/api/agent/', '/api/releases/publish'];
+const OPEN = ['/login', '/api/auth/login', '/api/auth/accounts', '/api/agent/', '/api/releases/publish'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

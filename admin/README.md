@@ -37,6 +37,13 @@ The monitor runs per Windows user while that user is signed in. It sends the PC 
 version, which parts run, whether a call is on, free memory and disk, and token counts. It never
 sends conversations, screens or emails.
 
+## Who can sign in
+
+The login page shows a card for each account: tap yours, then enter your password. There is one account
+(`ADMIN_USERNAME`) until you set `ADMIN_ACCOUNTS`, a line of JSON with a username, name, role and password hash for
+each person (`pnpm hash-password` makes a hash; see `.env.example`). Anyone who opens the page can see these names and
+roles. The Activity page records which account did what.
+
 ## Run it on this PC
 
 ```powershell

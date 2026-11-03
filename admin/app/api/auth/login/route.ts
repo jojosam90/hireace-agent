@@ -4,7 +4,7 @@ import { login } from '@/lib/auth';
 import { SESSION_COOKIE, SESSION_DAYS, signSession } from '@/lib/session';
 
 const REFUSALS = {
-  wrong: ['The username or password is not right.', 401],
+  wrong: ['That password is not right.', 401],
   locked: ['Too many tries. Wait 15 minutes and try again.', 429],
   not_set_up: ['Sign-in is not set up on the server yet.', 503],
 } as const;
