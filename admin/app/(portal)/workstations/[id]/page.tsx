@@ -35,6 +35,8 @@ export default function WorkstationPage() {
   if (!data) return error ? <Problem>{error}</Problem> : <Loading />;
   const { device, history, daily, latestVersion } = data;
   const isLatest = !latestVersion || device.version === latestVersion;
+  // Stopping or changing a PC midway through an update makes it roll back
+  const updating = device.state === 'updating';
 
   async function save(changes: Record<string, unknown>) {
     setSaveError('');
@@ -92,14 +94,14 @@ export default function WorkstationPage() {
           <OrderNote device={device} />
         </div>
         <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
-          <Button kind="primary" icon={PackageCheck} disabled={!device.active || isLatest} onClick={() => setOrder('update')}>
-            {!latestVersion ? 'No release yet' : isLatest ? 'On the latest version' : `Install ${latestVersion}`}
+          <Button kind="primary" icon={PackageCheck} disabled={!device.active || isLatest || updating} onClick={() => setOrder('update')}>
+            {updating ? 'Updating now' : !latestVersion ? 'No release yet' : isLatest ? 'On the latest version' : `Install ${latestVersion}`}
           </Button>
-          <Button icon={RefreshCw} disabled={!device.active} onClick={() => setOrder('restart')}>
+          <Button icon={RefreshCw} disabled={!device.active || updating} onClick={() => setOrder('restart')}>
             Restart
           </Button>
           {device.active ? (
-            <Button icon={Power} onClick={() => setOrder('deactivate')}>
+            <Button icon={Power} disabled={updating} onClick={() => setOrder('deactivate')}>
               Deactivate
             </Button>
           ) : (
@@ -107,7 +109,7 @@ export default function WorkstationPage() {
               Activate
             </Button>
           )}
-          <Button icon={Trash2} onClick={() => setRemoving(true)}>
+          <Button icon={Trash2} disabled={updating} onClick={() => setRemoving(true)}>
             Remove
           </Button>
         </div>

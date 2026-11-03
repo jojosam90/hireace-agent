@@ -19,9 +19,7 @@ const NAV = [
 export function Logo() {
   return (
     <div className="flex items-center gap-3">
-      <span className="flex size-12 items-center justify-center rounded-xl border border-white/25 bg-white/15 p-1.5">
-        <Image src="/logo.png" alt="" width={36} height={36} className="rounded-md" priority />
-      </span>
+      <Image src="/logo.png" alt="" width={44} height={44} className="rounded-xl" priority />
       <span>
         <span className="block text-2xl leading-tight font-extrabold">HireAce</span>
         <span className="block text-xs font-semibold tracking-wide text-white/85 uppercase">Admin portal</span>

@@ -19,7 +19,9 @@ export default function ReleasesPage() {
   }
 
   const active = fleet.data.devices.filter((device) => device.active);
-  const needing = (release: ReleaseView) => active.filter((device) => device.version !== release.version);
+  const updating = active.filter((device) => device.state === 'updating').length;
+  const needing = (release: ReleaseView) =>
+    active.filter((device) => device.version !== release.version && device.state !== 'updating');
 
   return (
     <Page title="Releases" intro="New versions of HireAce, published from the developer's PC with installer\publish-release.ps1.">
@@ -62,7 +64,12 @@ export default function ReleasesPage() {
                         href={release.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-brand-700 mt-2 inline-flex items-center gap-1 text-sm font-bold"
+                        aria-disabled={updating > 0}
+                        tabIndex={updating > 0 ? -1 : undefined}
+                        title={updating > 0 ? 'A workstation is updating' : undefined}
+                        className={`mt-2 inline-flex items-center gap-1 text-sm font-bold ${
+                          updating > 0 ? 'text-muted pointer-events-none opacity-40' : 'text-brand-700'
+                        }`}
                       >
                         Download
                         <ExternalLink className="size-3.5" aria-hidden />
@@ -75,7 +82,11 @@ export default function ReleasesPage() {
                       onClick={() => setChosen(release)}
                       className="w-full sm:w-auto"
                     >
-                      {count === 0 ? 'All up to date' : `Install on ${count} workstation${count === 1 ? '' : 's'}`}
+                      {updating > 0 && count === 0
+                        ? 'Updating now'
+                        : count === 0
+                          ? 'All up to date'
+                          : `Install on ${count} workstation${count === 1 ? '' : 's'}`}
                     </Button>
                   </div>
                 </Card>

@@ -9,13 +9,17 @@ import { usePoll } from '@/lib/client';
 import { ago, usd } from '@/lib/format';
 import type { DevicesData, DeviceView } from '@/lib/types';
 
-const FILTERS: { key: string; label: string; test: (device: DeviceView) => boolean }[] = [
-  { key: 'all', label: 'All', test: () => true },
-  { key: 'online', label: 'Online', test: (d) => d.active && d.online },
-  { key: 'offline', label: 'Offline', test: (d) => d.active && !d.online },
-  { key: 'down', label: 'HireAce down', test: (d) => d.state === 'down' || d.state === 'partial' },
-  { key: 'off', label: 'Deactivated', test: (d) => !d.active },
+// short: what fits on a phone, where the five share one row
+const FILTERS: { key: string; label: string; short: string; test: (device: DeviceView) => boolean }[] = [
+  { key: 'all', label: 'All', short: 'All', test: () => true },
+  { key: 'online', label: 'Online', short: 'Online', test: (d) => d.active && d.online },
+  { key: 'offline', label: 'Offline', short: 'Offline', test: (d) => d.active && !d.online },
+  { key: 'down', label: 'HireAce down', short: 'Down', test: (d) => d.state === 'down' || d.state === 'partial' },
+  { key: 'off', label: 'Deactivated', short: 'Inactive', test: (d) => !d.active },
 ];
+
+/** Nothing else may be ordered while a PC updates: stopping it midway makes it roll back. */
+const isUpdating = (device: DeviceView) => device.state === 'updating';
 
 interface Order {
   type: OrderType;
@@ -25,6 +29,7 @@ interface Order {
 
 /** Why a workstation cannot take the latest version; empty when it can. */
 function installBlocked(device: DeviceView, latest: string | null): string {
+  if (device.state === 'updating') return 'Updating now';
   if (!latest) return 'No release yet';
   if (!device.active) return 'Deactivated';
   if (device.version === latest) return `Already on ${latest}`;
@@ -81,22 +86,23 @@ export default function WorkstationsPage() {
       <IconButton
         icon={RefreshCw}
         label={`Restart ${device.name}`}
-        tip={device.active ? 'Restart' : 'Deactivated'}
-        disabled={!device.active}
+        tip={isUpdating(device) ? 'Updating now' : device.active ? 'Restart' : 'Deactivated'}
+        disabled={!device.active || isUpdating(device)}
         onClick={() => ask('restart', [device])}
       />
       <IconButton
         icon={Power}
         label={`${device.active ? 'Deactivate' : 'Activate'} ${device.name}`}
-        tip={device.active ? 'Deactivate' : 'Activate'}
+        tip={isUpdating(device) ? 'Updating now' : device.active ? 'Deactivate' : 'Activate'}
         tone={device.active ? 'danger' : 'good'}
+        disabled={isUpdating(device)}
         onClick={() => ask(device.active ? 'deactivate' : 'activate', [device])}
       />
     </>
   );
   const canInstall = chosen.filter((device) => !installBlocked(device, latest));
-  const canRestart = chosen.filter((device) => device.active);
-  const allOff = chosen.length > 0 && canRestart.length === 0;
+  const canRestart = chosen.filter((device) => device.active && !isUpdating(device));
+  const allOff = chosen.length > 0 && chosen.every((device) => !device.active);
   const bulkActions = (
     <>
       <IconButton
@@ -110,15 +116,16 @@ export default function WorkstationsPage() {
       <IconButton
         icon={RefreshCw}
         label={`Restart ${chosen.length} selected`}
-        tip={canRestart.length ? `Restart ${canRestart.length}` : 'All deactivated'}
+        tip={canRestart.length ? `Restart ${canRestart.length}` : 'None of these can restart now'}
         disabled={!canRestart.length}
         onClick={() => ask('restart', canRestart)}
       />
       <IconButton
         icon={Power}
         label={`${allOff ? 'Activate' : 'Deactivate'} ${chosen.length} selected`}
-        tip={allOff ? `Activate ${chosen.length}` : `Deactivate ${canRestart.length}`}
+        tip={allOff ? `Activate ${chosen.length}` : canRestart.length ? `Deactivate ${canRestart.length}` : 'Updating now'}
         tone={allOff ? 'good' : 'danger'}
+        disabled={!allOff && !canRestart.length}
         onClick={() => (allOff ? ask('activate', chosen) : ask('deactivate', canRestart))}
       />
     </>
@@ -138,7 +145,7 @@ export default function WorkstationsPage() {
       )}
 
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1">
           <Search className="text-muted absolute top-3 left-3.5 size-4" aria-hidden />
           <input
             type="search"
@@ -149,18 +156,25 @@ export default function WorkstationsPage() {
             className="border-line focus:border-brand-500 h-10 w-full rounded-xl border bg-white pr-3 pl-10 text-sm outline-none"
           />
         </div>
-        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          {FILTERS.map(({ key, label }) => (
+        {/* Phones: one neat bar of five equal parts. Wider: separate pills. */}
+        <div
+          role="group"
+          aria-label="Show"
+          className="border-line grid grid-cols-5 gap-0.5 rounded-xl border bg-white p-1 sm:flex sm:gap-1.5 sm:border-0 sm:bg-transparent sm:p-0"
+        >
+          {FILTERS.map(({ key, label, short }) => (
             <button
               key={key}
               type="button"
               aria-pressed={filter === key}
+              aria-label={label}
               onClick={() => setFilter(key)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-bold transition-colors ${
-                filter === key ? 'bg-brand-600 text-white' : 'border-line text-muted hover:bg-brand-50 border bg-white'
+              className={`min-w-0 rounded-lg py-2 text-xs font-bold transition-colors sm:shrink-0 sm:rounded-full sm:px-3 sm:py-1.5 sm:text-sm ${
+                filter === key ? 'bg-brand-600 text-white' : 'text-muted hover:bg-brand-50 sm:border-line sm:border sm:bg-white'
               }`}
             >
-              {label}
+              <span className="sm:hidden">{short}</span>
+              <span className="hidden sm:inline">{label}</span>
             </button>
           ))}
         </div>
@@ -304,24 +318,25 @@ export default function WorkstationsPage() {
                     aria-label={`Install the latest version on ${device.name}`}
                     disabled={Boolean(installBlocked(device, latest))}
                     onClick={() => ask('update', [device])}
-                    className="px-1! text-xs!"
+                    className="px-1! text-xs! max-[359px]:[&>svg]:hidden"
                   >
                     Install
                   </Button>
                   <Button
                     icon={RefreshCw}
                     aria-label={`Restart ${device.name}`}
-                    disabled={!device.active}
+                    disabled={!device.active || isUpdating(device)}
                     onClick={() => ask('restart', [device])}
-                    className="px-1! text-xs!"
+                    className="px-1! text-xs! max-[359px]:[&>svg]:hidden"
                   >
                     Restart
                   </Button>
                   <Button
                     icon={Power}
                     aria-label={`${device.active ? 'Deactivate' : 'Activate'} ${device.name}`}
+                    disabled={isUpdating(device)}
                     onClick={() => ask(device.active ? 'deactivate' : 'activate', [device])}
-                    className="px-1! text-xs!"
+                    className="px-1! text-xs! max-[359px]:[&>svg]:hidden"
                   >
                     {device.active ? 'Deactivate' : 'Activate'}
                   </Button>
