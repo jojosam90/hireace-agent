@@ -33,7 +33,15 @@ export default function LoginPage() {
   useEffect(() => {
     fetch('/api/auth/accounts', { cache: 'no-store' })
       .then((res) => res.json())
-      .then((data: { accounts: PublicAccount[] }) => setAccounts(data.accounts))
+      .then((data: { accounts: PublicAccount[] }) => {
+        setAccounts(data.accounts);
+        // Only one account: no need to choose it
+        if (data.accounts.length === 1) {
+          setUsername(data.accounts[0].username);
+          setPassword(data.accounts[0].prefillPassword ?? '');
+          if (!data.accounts[0].prefillPassword) passwordField.current?.focus();
+        }
+      })
       .catch(() => setError('Could not reach the server.'));
   }, []);
 
