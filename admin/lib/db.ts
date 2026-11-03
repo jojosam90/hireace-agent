@@ -1,5 +1,7 @@
 // Postgres on Vercel (DATABASE_URL), or a local database file on this PC. Same SQL for both.
 
+import { mkdir } from 'node:fs/promises';
+
 export interface Db {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
 }
@@ -110,7 +112,10 @@ async function connect(): Promise<Db> {
   } else {
     if (process.env.VERCEL) throw new Error('DATABASE_URL is not set.');
     const { PGlite } = await import('@electric-sql/pglite');
-    const pg = new PGlite(process.env.ADMIN_DATA_DIR ?? '.data/pglite');
+    const folder = process.env.ADMIN_DATA_DIR ?? '.data/pglite';
+    // It makes only its own last folder, not the ones above
+    if (!folder.includes('://')) await mkdir(folder, { recursive: true });
+    const pg = new PGlite(folder);
     db = { query: async (text, params = []) => (await pg.query(text, params)).rows as never };
   }
   for (const statement of SCHEMA) await db.query(statement);
