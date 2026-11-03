@@ -34,7 +34,7 @@ function alerts(fleet: DevicesData, spending: AlertsData | null): Alert[] {
 }
 
 export default function OverviewPage() {
-  const fleet = usePoll<DevicesData>('/api/admin/devices');
+  const fleet = usePoll<DevicesData>('/api/admin/devices', 5_000);
   const usage = usePoll<UsageData>('/api/admin/usage');
   const activity = usePoll<{ activity: ActivityRow[] }>('/api/admin/activity');
   const spending = usePoll<AlertsData>('/api/admin/alerts');

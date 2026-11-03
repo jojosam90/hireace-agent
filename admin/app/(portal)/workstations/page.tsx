@@ -32,7 +32,7 @@ function installBlocked(device: DeviceView, latest: string | null): string {
 }
 
 export default function WorkstationsPage() {
-  const { data, error, reload } = usePoll<DevicesData>('/api/admin/devices');
+  const { data, error, reload } = usePoll<DevicesData>('/api/admin/devices', 5_000);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());

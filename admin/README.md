@@ -19,7 +19,8 @@ or down, updates, restart, deactivate, and OpenAI usage with monthly limits. It 
 ```
 
 A PC behind a router cannot be reached from the internet, so the portal never calls a PC: each one
-calls out, and orders travel in the answer. An order takes up to one check-in to arrive.
+calls out, and orders travel in the answer. An order takes up to one check-in to arrive. A call
+starting or ending is reported within seconds, without waiting for the next check-in.
 
 | Shown as | Means |
 | --- | --- |

@@ -6,8 +6,9 @@
   Runs from Windows sign-in with no window (fleet.vbs), whether or not HireAce is open, so
   the portal can tell "this PC is offline" from "HireAce is closed" and can still restart or
   update it. A PC behind a router cannot be reached from the internet, so it calls out: it
-  checks in every minute, and the answer carries any order. Its only other work is a few
-  local checks, so it is idle almost all the time.
+  checks in every minute, and the answer carries any order. A call starting or ending is
+  reported within seconds, by asking HireAce on this PC every 5 seconds. Its only other
+  work is a few local checks, so it is idle almost all the time.
 
   Sends: PC and Windows user name, HireAce version, which parts are running, whether a call is
   on, free memory and disk, and token counts. Never the conversations, screens or emails.
@@ -21,7 +22,10 @@ param(
   [string]$PortalUrl = '',
   [switch]$Once,
   # For testing: never start HireAce
-  [switch]$NoStart
+  [switch]$NoStart,
+  # For testing: run beside the real monitor, against a stand-in gatekeeper
+  [string]$Instance = 'HireAceMonitor',
+  [string]$GatekeeperUrl = 'http://127.0.0.1:8080'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,7 +33,7 @@ $ProgressPreference = 'SilentlyContinue'
 . (Join-Path $Root 'fleet-common.ps1')
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$single = New-Object System.Threading.Mutex($false, 'Local\HireAceMonitor')
+$single = New-Object System.Threading.Mutex($false, "Local\$Instance")
 try { $first = $single.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $first = $true }
 if (-not $first) { exit 3 }
 
@@ -50,6 +54,7 @@ $spool = Join-Path $DataDir 'usage.jsonl'
 $sending = Join-Path $DataDir 'usage.sending'
 $script:results = New-Object System.Collections.ArrayList
 $script:interval = 60
+$script:reportedCall = $false
 $monitorScript = Join-Path $Root 'fleet.ps1'
 $startedFrom = (Get-Item $monitorScript).LastWriteTimeUtc
 
@@ -84,7 +89,7 @@ function Test-InCall {
   $token = Get-EnvValue (Join-Path $Root 'agent\.env') 'GATEKEEPER_TOKEN'
   if (-not $token) { return $false }
   try {
-    $answer = Invoke-RestMethod 'http://127.0.0.1:8080/v1/calls' -Headers @{ 'X-Gatekeeper-Token' = $token } -TimeoutSec 3
+    $answer = Invoke-RestMethod "$GatekeeperUrl/v1/calls" -Headers @{ 'X-Gatekeeper-Token' = $token } -TimeoutSec 3
     [bool]$answer.room
   } catch {
     $false
@@ -235,6 +240,7 @@ function Invoke-CheckIn {
     throw
   }
   # The portal has them now
+  $script:reportedCall = [bool]$report.inCall
   $script:results.Clear()
   if ($report.usage -and (Test-Path $sending)) { Remove-Item -Force $sending }
   if ($report.results | Where-Object { $_.status -ne 'running' -and (Test-Path $statusFile) }) {
@@ -254,6 +260,11 @@ while ($true) {
   if ($Once) { break }
   # An update replaced this script: start again on the new one (fleet.vbs does it)
   if ((Test-Path $monitorScript) -and (Get-Item $monitorScript).LastWriteTimeUtc -ne $startedFrom) { exit 0 }
-  Start-Sleep -Seconds $script:interval
+  # Until the next check-in, or sooner if a call has started or ended
+  $nextCheckIn = (Get-Date).AddSeconds($script:interval)
+  while ((Get-Date) -lt $nextCheckIn) {
+    Start-Sleep -Seconds 5
+    if ((Test-InCall) -ne $script:reportedCall) { break }
+  }
   [GC]::Collect()
 }
