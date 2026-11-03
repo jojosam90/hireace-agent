@@ -1,5 +1,6 @@
 start.ps1
 panel.ps1
+confirm-exit.ps1
 bubble.ps1
 hireace.vbs
 README.md

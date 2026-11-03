@@ -56,16 +56,12 @@ function Show-Panel {
 
 # The panel was closed: does the user mean to exit HireAce? No is the default, so a stray
 # Enter cannot stop it. (Chrome's window cannot be kept open, so this comes just after.)
+# In its own process: asked from start.ps1's, the box closed itself at once and answered No.
 function Confirm-Exit {
-  Add-Type -AssemblyName System.Windows.Forms
-  $answer = [System.Windows.Forms.MessageBox]::Show(
-    "Exit HireAce?`n`nIt will stop until you start it again from the desktop icon.",
-    'HireAce',
-    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-    [System.Windows.Forms.MessageBoxIcon]::Question,
-    [System.Windows.Forms.MessageBoxDefaultButton]::Button2,
-    [System.Windows.Forms.MessageBoxOptions]::DefaultDesktopOnly)  # in front of everything
-  $answer -eq [System.Windows.Forms.DialogResult]::Yes
+  $question = Start-NoWindow 'powershell.exe' ("-NoProfile -ExecutionPolicy Bypass -File " +
+    "`"$(Join-Path $PSScriptRoot 'confirm-exit.ps1')`"")
+  $question.WaitForExit()
+  $question.ExitCode -eq 6  # IDYES
 }
 
 function Open-Panel {
