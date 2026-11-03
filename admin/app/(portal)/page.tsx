@@ -53,7 +53,7 @@ export default function OverviewPage() {
     ? active.filter((device) => device.version !== fleet.data!.latestVersion).length
     : 0;
   const notices = alerts(fleet.data, spending.data);
-  const { monthCostUsd, budgetUsd, warnPercent, onPaceUsd } = usage.data;
+  const { monthCostUsd, budgetUsd, warnPercent, onPaceUsd, billed } = usage.data;
 
   return (
     <Page title="Overview">
@@ -65,11 +65,17 @@ export default function OverviewPage() {
         <Stat label="In a call" value={inCall.length} note="Right now" icon={PhoneCall} />
         <Stat
           label="Spend this month"
-          value={usd(monthCostUsd)}
-          note={budgetUsd !== null ? `of ${usd(budgetUsd)}` : `Estimate · on pace for ${usd(onPaceUsd)}`}
+          value={usd(billed ? billed.usd : monthCostUsd)}
+          note={
+            billed
+              ? 'Billed by OpenAI, whole organization'
+              : budgetUsd !== null
+                ? `Estimate, of ${usd(budgetUsd)}`
+                : `Estimate · on pace for ${usd(onPaceUsd)}`
+          }
           icon={Wallet}
         >
-          {budgetUsd !== null && <Meter value={monthCostUsd} limit={budgetUsd} warnPercent={warnPercent} />}
+          {!billed && budgetUsd !== null && <Meter value={monthCostUsd} limit={budgetUsd} warnPercent={warnPercent} />}
         </Stat>
       </div>
 
@@ -91,8 +97,16 @@ export default function OverviewPage() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
-          <CardTitle hint="Last 30 days, all workstations (estimate)">OpenAI spend per day</CardTitle>
-          <DailyBars daily={usage.data.daily} />
+          <CardTitle
+            hint={
+              billed
+                ? 'Billed by OpenAI, whole organization. Last 30 days, UTC. Today can be low until OpenAI posts it.'
+                : 'Last 30 days, all workstations (estimate)'
+            }
+          >
+            OpenAI spend per day
+          </CardTitle>
+          <DailyBars daily={billed ? billed.days.slice(-30) : usage.data.daily} />
         </Card>
 
         <Card className="lg:col-span-2">

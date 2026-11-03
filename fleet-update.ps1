@@ -16,7 +16,9 @@ param(
   [Parameter(Mandatory)][string]$DataDir,
   # For testing: no reinstall or rebuild, and HireAce is not started afterwards
   [switch]$NoStart,
-  [switch]$SkipBuild
+  [switch]$SkipBuild,
+  # A step taking longer than this has failed, and the PC goes back to what it had
+  [double]$ToolMinutes = 30
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,7 +34,8 @@ $work = Join-Path $env:TEMP "hireace-update-$($job.id)"
 $package = Join-Path $work 'package.zip'
 $backup = Join-Path $work 'backup'
 $buildFolder = Join-Path $Root 'agent\frontend\.next'
-$oldBuild = "$buildFolder.previous"
+# Outside the app: anything left in its folder is read by the next build as source code
+$oldBuild = Join-Path $work 'previous-build'
 $listFile = Join-Path $Root 'release-files.txt'
 
 function Set-Status([string]$status, [string]$detail) {
@@ -74,16 +77,13 @@ function Get-PackageFiles {
 function Invoke-Tool([string]$name, [string]$folder, [string]$command) {
   Set-Status 'running' $name
   Add-Content -Path $updateLog -Encoding utf8 -Value "--- $name ($command)"
-  Push-Location $folder
-  try {
-    $ErrorActionPreference = 'Continue'
-    & cmd.exe /d /c "$command >> `"$updateLog`" 2>&1"
-    $code = $LASTEXITCODE
-  } finally {
-    $ErrorActionPreference = 'Stop'
-    Pop-Location
+  $tool = Start-Process cmd.exe -ArgumentList '/d', '/c', "`"$command >> `"$updateLog`" 2>&1`"" -WorkingDirectory $folder -WindowStyle Hidden -PassThru
+  $null = $tool.Handle  # without it, ExitCode comes back empty
+  if (-not $tool.WaitForExit([int]($ToolMinutes * 60000))) {
+    & taskkill.exe /T /F /PID $tool.Id 2>$null | Out-Null
+    throw "$name took longer than $ToolMinutes minutes"
   }
-  if ($code) { throw "$name failed (see update.log on the PC)" }
+  if ($tool.ExitCode) { throw "$name failed (see update.log on the PC)" }
 }
 
 function Install-Dependencies {

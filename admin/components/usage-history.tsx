@@ -4,8 +4,8 @@ import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Card, CardTitle, Loading, Problem } from '@/components/ui';
 import { usePoll } from '@/lib/client';
-import { compact, shortDay, usd } from '@/lib/format';
-import type { PeriodRow, UsageHistoryData } from '@/lib/types';
+import { ago, compact, shortDay, usd } from '@/lib/format';
+import type { Bill, PeriodRow, UsageHistoryData } from '@/lib/types';
 
 // Fixed order, validated for colour blindness against a white card (dataviz validator).
 // Eight at most: anything more folds into Other.
@@ -70,6 +70,23 @@ function XAxis({ days }: { days: string[] }) {
       <span>{shortDay(middle)}</span>
       <span>{shortDay(days[days.length - 1])}</span>
     </div>
+  );
+}
+
+function SeriesLegend({ series, total }: { series: Series[]; total: number }) {
+  return (
+    <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-4">
+      {series.map((item) => (
+        <li key={item.key} className="flex min-w-0 gap-2.5">
+          <span className="w-1 shrink-0 rounded-full" style={{ background: item.color }} aria-hidden />
+          <span className="min-w-0">
+            <span className="text-muted block truncate text-sm">{item.key}</span>
+            <span className="block text-xl font-extrabold tabular-nums">{percentText(total ? (item.cost / total) * 100 : 0)}</span>
+            <span className="text-muted block text-xs tabular-nums">{usd(item.cost)}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -289,6 +306,107 @@ function PeriodTable({ title, rows, showShare }: { title: string; rows: PeriodRo
   );
 }
 
+/** What OpenAI bills, day by day and by model: the real figures, for the whole organization. */
+export function OpenAIBill({ bill }: { bill: Bill }) {
+  const [span, setSpan] = useState<7 | 30>(30);
+  const [asTable, setAsTable] = useState(false);
+  const days = bill.days.slice(-span);
+  const totals = new Map<string, number>();
+  for (const day of days) {
+    for (const [model, value] of Object.entries(day.models)) totals.set(model, (totals.get(model) ?? 0) + value);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const named = ranked.slice(0, MAX_NAMED).map(([model]) => model);
+  const series: Series[] = [...named].sort().map((key, index) => ({
+    key,
+    color: COLORS[index],
+    cost: totals.get(key)!,
+    responses: 0,
+  }));
+  const rest = ranked.slice(MAX_NAMED);
+  if (rest.length) {
+    series.push({ key: 'Other', color: OTHER_COLOR, cost: rest.reduce((sum, [, value]) => sum + value, 0), responses: 0 });
+  }
+  const byDay = new Map(days.map((day) => [day.day, day]));
+  const valueOf = (date: string, key: string) => {
+    const models = byDay.get(date)?.models ?? {};
+    if (key !== 'Other') return models[key] ?? 0;
+    return Object.entries(models).reduce((sum, [model, value]) => (named.includes(model) ? sum : sum + value), 0);
+  };
+  const dates = days.map((day) => day.day);
+  const total = days.reduce((sum, day) => sum + day.cost, 0);
+
+  return (
+    <>
+      <div className="mt-6 mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-extrabold">Billed by OpenAI</h2>
+          <p className="text-muted text-sm">
+            The real bill for your whole OpenAI organization, including anything else that uses it. Days are UTC, and OpenAI posts
+            costs some time after use, so today can be low.
+          </p>
+        </div>
+        <Segmented
+          label="Days shown on the bill"
+          value={span}
+          options={[[7, '7d'], [30, '30d']]}
+          onChange={setSpan}
+        />
+      </div>
+      <Card>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <span>
+            <span className="text-2xl font-extrabold tabular-nums">{usd(total)}</span>
+            <span className="text-muted ml-2 text-sm">
+              {shortDay(dates[0])} – {shortDay(dates[dates.length - 1])}
+            </span>
+          </span>
+          <button type="button" onClick={() => setAsTable(!asTable)} className="text-brand-700 text-sm font-bold">
+            {asTable ? 'Show chart' : 'Show table'}
+          </button>
+        </div>
+        {bill.stale && (
+          <Problem>Could not reach OpenAI just now. These are the last figures read, {ago(bill.at)}.</Problem>
+        )}
+        {asTable ? (
+          <div className="scroll-thin max-h-72 overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-muted sticky top-0 bg-white text-left">
+                <tr>
+                  <th className="py-1 pr-3 font-semibold">Day (UTC)</th>
+                  <th className="py-1 pr-3 text-right font-semibold">Total</th>
+                  {series.map((item) => (
+                    <th key={item.key} className="py-1 pr-3 text-right font-semibold whitespace-nowrap">
+                      {item.key}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...days].reverse().map((day) => (
+                  <tr key={day.day} className="border-line border-t">
+                    <td className="py-1.5 pr-3 whitespace-nowrap">{shortDay(day.day)}</td>
+                    <td className="py-1.5 pr-3 text-right font-semibold tabular-nums">{usd(day.cost)}</td>
+                    {series.map((item) => (
+                      <td key={item.key} className="py-1.5 pr-3 text-right tabular-nums">
+                        {usd(valueOf(day.day, item.key))}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <StackedBars days={dates} series={series} valueOf={valueOf} />
+        )}
+        {series.length > 0 && <SeriesLegend series={series} total={total} />}
+        <p className="text-muted mt-3 text-xs">Read {ago(bill.at)}. Asked at most every 15 minutes.</p>
+      </Card>
+    </>
+  );
+}
+
 export function UsageHistory() {
   const [days, setDays] = useState<7 | 30>(7);
   const [page, setPage] = useState(0);
@@ -439,22 +557,7 @@ export function UsageHistory() {
           <StackedBars days={data.days} series={chart.series} valueOf={chart.cost} />
         )}
 
-        {chart.series.length > 0 && (
-          <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-4">
-            {chart.series.map((item) => (
-              <li key={item.key} className="flex min-w-0 gap-2.5">
-                <span className="w-1 shrink-0 rounded-full" style={{ background: item.color }} aria-hidden />
-                <span className="min-w-0">
-                  <span className="text-muted block truncate text-sm">{item.key}</span>
-                  <span className="block text-xl font-extrabold tabular-nums">
-                    {percentText(chart.totalCost ? (item.cost / chart.totalCost) * 100 : 0)}
-                  </span>
-                  <span className="text-muted block text-xs tabular-nums">{usd(item.cost)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        {chart.series.length > 0 && <SeriesLegend series={chart.series} total={chart.totalCost} />}
       </Card>
 
       <Card className="mt-4">

@@ -110,7 +110,7 @@ limits, or Project settings > Limits) run on OpenAI's own tracked spend and a PC
 | --- | --- | --- |
 | Each voice response, reported by the PC (what this portal shows) | About a minute, one check-in | Voice model only, per workstation, priced as an estimate |
 | OpenAI Usage API (`/v1/organization/usage/...`, Admin key) | Buckets of 1 minute, 1 hour or 1 day; OpenAI's reference states no delay | Whole organization, tokens, not per workstation |
-| OpenAI Costs API (`/v1/organization/costs`, Admin key), the "Billed by OpenAI" tile | Daily buckets only | Whole organization, real dollars |
+| OpenAI Costs API (`/v1/organization/costs`, Admin key), the "Billed by OpenAI" chart | Daily buckets only, and OpenAI posts a day's costs some time after use | Whole organization, real dollars, by model |
 
 The first row is the freshest: every response from the model carries its token counts. For fresher numbers lower the
 check-in time under Usage (30 seconds at least).

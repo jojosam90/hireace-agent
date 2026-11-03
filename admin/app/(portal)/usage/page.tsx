@@ -3,7 +3,7 @@
 import { AlertTriangle, BellRing, Check, LoaderCircle, Mail, Receipt, Save, TrendingUp, Wallet, XCircle } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { RankBars, TokenTable } from '@/components/charts';
-import { UsageHistory } from '@/components/usage-history';
+import { OpenAIBill, UsageHistory } from '@/components/usage-history';
 import { Badge, Button, Card, CardTitle, Empty, Loading, Meter, Page, Problem, Stat } from '@/components/ui';
 import { call, usePoll } from '@/lib/client';
 import { ago, usd } from '@/lib/format';
@@ -319,7 +319,7 @@ export default function UsagePage() {
   return (
     <Page
       title="OpenAI usage"
-      intro="Estimated from the tokens each workstation reports, at the prices below. Usage arrives with each check-in."
+      intro="The real bill from OpenAI, and an estimate per workstation from the tokens each PC reports since it was installed."
     >
       {error && <Problem>Could not refresh. Showing the last known figures.</Problem>}
       <div className="grid gap-3 sm:grid-cols-3">
@@ -336,7 +336,7 @@ export default function UsagePage() {
           <Stat
             label="Billed by OpenAI"
             value={usd(data.billed.usd)}
-            note={`Whole organization · read ${ago(data.billed.at)}`}
+            note="This month, whole organization"
             icon={Receipt}
           />
         ) : (
@@ -348,6 +348,8 @@ export default function UsagePage() {
           />
         )}
       </div>
+
+      {data.billed && <OpenAIBill bill={data.billed} />}
 
       <SpendingAlerts refresh={saves} />
 

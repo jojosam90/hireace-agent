@@ -1,7 +1,8 @@
 import type { CommandRow, DeviceView } from './fleet';
+import type { Bill, BilledDay } from './openai-billing';
 import type { PortalSettings } from './settings';
 
-export type { DeviceView, PortalSettings };
+export type { Bill, BilledDay, DeviceView, PortalSettings };
 
 export interface DevicesData {
   devices: DeviceView[];
@@ -27,7 +28,7 @@ export interface UsageData {
   tokens: Record<'inText' | 'inAudio' | 'inImage' | 'cached' | 'outText' | 'outAudio', number>;
   models: { model: string; cost: number }[];
   daily: { day: string; cost: number }[];
-  billed: { usd: number; at: number } | null;
+  billed: Bill | null;
   adminKeySet: boolean;
   devices: { id: string; name: string; cost: number; limit: number | null }[];
 }

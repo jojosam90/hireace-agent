@@ -1,12 +1,12 @@
 import { respond } from '@/lib/api';
 import { listDevices, usageSummary } from '@/lib/fleet';
-import { billedThisMonth } from '@/lib/openai-billing';
+import { openaiBill } from '@/lib/openai-billing';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   return respond(async () => {
-    const [summary, devices, billed] = await Promise.all([usageSummary(), listDevices(), billedThisMonth()]);
+    const [summary, devices, billed] = await Promise.all([usageSummary(), listDevices(), openaiBill()]);
     return {
       ...summary,
       billed,

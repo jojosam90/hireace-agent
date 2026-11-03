@@ -40,7 +40,7 @@ export function DailyBars({ daily }: { daily: { day: string; cost: number }[] })
             <thead className="text-muted sticky top-0 bg-white text-left">
               <tr>
                 <th className="py-1 font-semibold">Day</th>
-                <th className="py-1 text-right font-semibold">Estimated spend</th>
+                <th className="py-1 text-right font-semibold">Spend</th>
               </tr>
             </thead>
             <tbody>
