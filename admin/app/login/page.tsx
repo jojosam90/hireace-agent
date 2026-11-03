@@ -106,7 +106,7 @@ export default function LoginPage() {
           <div
             role="group"
             aria-labelledby="choose-account"
-            className="scroll-thin mt-2 grid max-h-72 grid-cols-1 gap-2 overflow-y-auto p-0.5 min-[360px]:grid-cols-2 [@media(max-height:720px)]:max-h-36"
+            className="scroll-thin mt-2 grid max-h-[19rem] grid-cols-1 gap-2 overflow-y-auto p-0.5 min-[360px]:grid-cols-2 [@media(max-height:720px)]:max-h-36"
           >
             {accounts?.map((account) => {
               const chosen = username === account.username;
