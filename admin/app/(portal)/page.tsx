@@ -6,7 +6,7 @@ import { DailyBars } from '@/components/charts';
 import { Card, CardTitle, Empty, Loading, Meter, Page, Problem, Stat, StateBadge } from '@/components/ui';
 import { usePoll } from '@/lib/client';
 import { ago, usd } from '@/lib/format';
-import type { ActivityRow, DevicesData, UsageData } from '@/lib/types';
+import type { ActivityRow, AlertsData, DevicesData, UsageData } from '@/lib/types';
 
 interface Alert {
   key: string;
@@ -16,37 +16,18 @@ interface Alert {
   href: string;
 }
 
-function alerts(fleet: DevicesData, usage: UsageData): Alert[] {
-  const list: Alert[] = [];
-  if (usage.budgetUsd !== null) {
-    const percent = (usage.monthCostUsd / usage.budgetUsd) * 100;
-    if (percent >= 100) {
-      list.push({
-        key: 'budget',
-        tone: 'bad',
-        icon: XCircle,
-        text: `Monthly budget reached: ${usd(usage.monthCostUsd)} of ${usd(usage.budgetUsd)}. ${
-          usage.atLimit === 'block' ? 'New calls are refused.' : 'Calls are still allowed.'
-        }`,
-        href: '/usage',
-      });
-    } else if (percent >= usage.warnPercent) {
-      list.push({
-        key: 'budget',
-        tone: 'warn',
-        icon: AlertTriangle,
-        text: `${Math.round(percent)}% of the monthly budget used.`,
-        href: '/usage',
-      });
-    }
-  }
+function alerts(fleet: DevicesData, spending: AlertsData | null): Alert[] {
+  const list: Alert[] = (spending?.open ?? []).map((alert) => ({
+    key: alert.id,
+    tone: alert.severity === 'critical' ? 'bad' : 'warn',
+    icon: alert.severity === 'critical' ? XCircle : Wallet,
+    text: `${alert.title}. ${alert.detail}`,
+    href: '/usage',
+  }));
   for (const device of fleet.devices) {
-    const href = `/workstations/${device.id}`;
     if (device.state === 'partial') {
+      const href = `/workstations/${device.id}`;
       list.push({ key: `${device.id}-p`, tone: 'warn', icon: AlertTriangle, text: `${device.name}: part of HireAce is not running.`, href });
-    }
-    if (device.limitUsd !== null && device.monthCostUsd >= device.limitUsd) {
-      list.push({ key: `${device.id}-l`, tone: 'bad', icon: Wallet, text: `${device.name} reached its ${usd(device.limitUsd)} limit.`, href });
     }
   }
   return list;
@@ -56,6 +37,7 @@ export default function OverviewPage() {
   const fleet = usePoll<DevicesData>('/api/admin/devices');
   const usage = usePoll<UsageData>('/api/admin/usage');
   const activity = usePoll<{ activity: ActivityRow[] }>('/api/admin/activity');
+  const spending = usePoll<AlertsData>('/api/admin/alerts');
 
   if (!fleet.data || !usage.data) {
     return fleet.error || usage.error ? <Problem>{fleet.error || usage.error}</Problem> : <Loading />;
@@ -70,7 +52,7 @@ export default function OverviewPage() {
   const outdated = fleet.data.latestVersion
     ? active.filter((device) => device.version !== fleet.data!.latestVersion).length
     : 0;
-  const notices = alerts(fleet.data, usage.data);
+  const notices = alerts(fleet.data, spending.data);
   const { monthCostUsd, budgetUsd, warnPercent, onPaceUsd } = usage.data;
 
   return (

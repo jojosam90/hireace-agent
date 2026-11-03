@@ -3,6 +3,7 @@
 // each one checks in, and gets its orders in the answer.
 
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { checkSpendAlerts } from './alerts';
 import { getDb } from './db';
 import { formatLicense, licenseIsValid } from './license';
 import { getSettings, type PortalSettings, type Prices } from './settings';
@@ -67,6 +68,7 @@ export interface ReleaseRow {
 export interface UsageItem {
   day: string;
   model: string;
+  responses?: number;
   inText?: number;
   inAudio?: number;
   inImage?: number;
@@ -175,7 +177,7 @@ export async function enroll(body: Record<string, unknown>, now = Date.now()) {
 // --- A workstation checking in -----------------------------------------------------
 
 async function recordUsage(deviceId: string, usage: HeartbeatReport['usage'], prices: Prices, now: number) {
-  if (!usage?.batchId || !Array.isArray(usage.items)) return;
+  if (!usage?.batchId || !Array.isArray(usage.items)) return false;
   const db = await getDb();
   // A batch whose answer got lost is sent again: counted once
   const fresh = await db.query(
@@ -183,14 +185,14 @@ async function recordUsage(deviceId: string, usage: HeartbeatReport['usage'], pr
      ON CONFLICT DO NOTHING RETURNING batch_id`,
     [text(usage.batchId, 80), deviceId, now],
   );
-  if (!fresh.length) return;
+  if (!fresh.length) return false;
   for (const item of usage.items) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(item.day ?? '')) continue;
     await db.query(
       `INSERT INTO usage_daily AS u (device_id, day, model, responses, in_text, in_audio, in_image, cached_text, cached_audio, out_text, out_audio, cost_usd)
-       VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $12, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (device_id, day, model) DO UPDATE SET
-         responses = u.responses + 1,
+         responses = u.responses + EXCLUDED.responses,
          in_text = u.in_text + EXCLUDED.in_text,
          in_audio = u.in_audio + EXCLUDED.in_audio,
          in_image = u.in_image + EXCLUDED.in_image,
@@ -211,9 +213,11 @@ async function recordUsage(deviceId: string, usage: HeartbeatReport['usage'], pr
         count(item.outText),
         count(item.outAudio),
         costOf(item, prices),
+        count(item.responses),
       ],
     );
   }
+  return true;
 }
 
 /** Should this workstation refuse new calls? Its own limit first, then the shared ones. */
@@ -265,7 +269,7 @@ export async function heartbeat(token: string, report: HeartbeatReport, now = Da
       numberOrNull(report.diskFreeGb),
     ],
   );
-  await recordUsage(device.id, report.usage, settings.prices, now);
+  if (await recordUsage(device.id, report.usage, settings.prices, now)) await checkSpendAlerts(now);
   for (const result of report.results ?? []) await applyResult(device.id, result, now);
   await sweepCommands(now);
 
@@ -567,6 +571,75 @@ export async function dailyCost(deviceId: string | null, now = Date.now(), days 
   );
   const cost = new Map(rows.map((row) => [row.day, Number(row.cost)]));
   return range.map((day) => ({ day, cost: cost.get(day) ?? 0 }));
+}
+
+/** One page of days for the history charts; page 0 ends today. */
+export async function usageHistory(days: number, page: number, now = Date.now()) {
+  const db = await getDb();
+  const end = now - page * days * 24 * HOUR;
+  const range = lastDays(days, end);
+  const rows = await db.query<{ day: string; name: string; model: string; cost: number; responses: number }>(
+    `SELECT u.day, COALESCE(NULLIF(d.label, ''), d.hostname) AS name, u.model, u.cost_usd AS cost, u.responses
+     FROM usage_daily u JOIN devices d ON d.id = u.device_id WHERE u.day >= $1 AND u.day <= $2`,
+    [range[0], range[range.length - 1]],
+  );
+  const [first] = await db.query<{ day: string | null }>(`SELECT MIN(day) AS day FROM usage_daily`);
+  return {
+    days: range,
+    hasEarlier: Boolean(first?.day && first.day < range[0]),
+    rows: rows.map((row) => ({
+      day: row.day,
+      name: row.name || 'Unnamed PC',
+      model: row.model,
+      cost: Number(row.cost),
+      responses: Number(row.responses),
+    })),
+  };
+}
+
+/** Spend per month and per week (Monday to Sunday, UTC), each with its workstations. */
+export async function spendPeriods(now = Date.now(), months = 6, weeks = 12) {
+  const db = await getDb();
+  const settings = await getSettings();
+  const date = new Date(now);
+  const from = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - (months - 1), 1)).toISOString().slice(0, 10);
+  const rows = await db.query<{ day: string; name: string; cost: number }>(
+    `SELECT u.day, COALESCE(NULLIF(d.label, ''), d.hostname) AS name, SUM(u.cost_usd) AS cost
+     FROM usage_daily u JOIN devices d ON d.id = u.device_id WHERE u.day >= $1 GROUP BY u.day, d.label, d.hostname`,
+    [from],
+  );
+  const short = (at: Date) => at.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const period = (label: string, start: string, end: string, budget: number | null) => {
+    const breakdown = new Map<string, number>();
+    for (const row of rows) {
+      if (row.day >= start && row.day <= end) {
+        breakdown.set(row.name || 'Unnamed PC', (breakdown.get(row.name || 'Unnamed PC') ?? 0) + Number(row.cost));
+      }
+    }
+    const cost = [...breakdown.values()].reduce((sum, value) => sum + value, 0);
+    return {
+      label,
+      cost,
+      percentOfBudget: budget ? (cost / budget) * 100 : null,
+      breakdown: [...breakdown.entries()].map(([name, value]) => ({ name, cost: value })).sort((a, b) => b.cost - a.cost),
+    };
+  };
+  const monthRows = Array.from({ length: months }, (_, back) => {
+    const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - back, 1));
+    const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - back + 1, 0));
+    const label = start.toLocaleDateString('en-SG', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    return period(label, start.toISOString().slice(0, 10), end.toISOString().slice(0, 10), settings.monthlyBudgetUsd);
+  });
+  const monday = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) - ((date.getUTCDay() + 6) % 7) * 24 * HOUR;
+  const weekRows = Array.from({ length: weeks }, (_, back) => {
+    const start = new Date(monday - back * 7 * 24 * HOUR);
+    const end = new Date(start.getTime() + 6 * 24 * HOUR);
+    return period(`${short(start)} – ${short(end)}`, start.toISOString().slice(0, 10), end.toISOString().slice(0, 10), null);
+  });
+  return {
+    months: monthRows.filter((row, index) => index === 0 || row.cost > 0),
+    weeks: weekRows.filter((row, index) => index === 0 || row.cost > 0),
+  };
 }
 
 export async function usageSummary(now = Date.now()) {

@@ -106,13 +106,17 @@ function Get-UsageBatch {
     $key = "$($row.day)|$($row.model)"
     if (-not $totals[$key]) {
       $totals[$key] = @{
-        day = $row.day; model = $row.model; inText = 0; inAudio = 0; inImage = 0
+        day = $row.day; model = $row.model; responses = 0; inText = 0; inAudio = 0; inImage = 0
         cachedText = 0; cachedAudio = 0; outText = 0; outAudio = 0
       }
     }
+    $tokens = 0
     foreach ($field in 'inText', 'inAudio', 'inImage', 'cachedText', 'cachedAudio', 'outText', 'outAudio') {
       $totals[$key][$field] += [double]$row.$field
+      $tokens += [double]$row.$field
     }
+    # The model also reports an empty line now and then: not a response
+    if ($tokens -gt 0) { $totals[$key].responses += 1 }
   }
   if (-not $totals.Count) {
     Remove-Item -Force $sending

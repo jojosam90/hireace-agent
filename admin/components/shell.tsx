@@ -5,6 +5,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { usePoll } from '@/lib/client';
+import type { AlertsData } from '@/lib/types';
 
 const NAV = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
@@ -36,6 +38,14 @@ async function signOut() {
 export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+  const alerts = usePoll<AlertsData>('/api/admin/alerts', 30_000).data?.open.length ?? 0;
+  const badge = (href: string, className: string) =>
+    href === '/usage' && alerts > 0 ? (
+      <span className={`rounded-full bg-red-600 px-1.5 text-[11px] leading-4 font-bold text-white ${className}`}>
+        {alerts}
+        <span className="sr-only"> open spending alerts</span>
+      </span>
+    ) : null;
 
   return (
     <div className="min-h-dvh lg:pl-64">
@@ -54,6 +64,7 @@ export function Shell({ children }: { children: ReactNode }) {
             >
               <Icon className="size-5" aria-hidden />
               {label}
+              {badge(href, 'ml-auto')}
             </Link>
           ))}
         </nav>
@@ -90,7 +101,10 @@ export function Shell({ children }: { children: ReactNode }) {
               isCurrent(href) ? 'text-brand-700' : 'text-muted'
             }`}
           >
-            <Icon className="size-5" aria-hidden />
+            <span className="relative">
+              <Icon className="size-5" aria-hidden />
+              {badge(href, 'absolute -top-1.5 left-3.5')}
+            </span>
             {label === 'Workstations' ? 'PCs' : label}
           </Link>
         ))}

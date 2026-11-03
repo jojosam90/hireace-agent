@@ -82,6 +82,21 @@ const SCHEMA = [
     detail text NOT NULL DEFAULT ''
   )`,
   `CREATE INDEX IF NOT EXISTS activity_by_time ON activity (at DESC)`,
+  `CREATE TABLE IF NOT EXISTS alerts (
+    id text PRIMARY KEY,
+    scope text NOT NULL,
+    level double precision NOT NULL,
+    severity text NOT NULL,
+    title text NOT NULL,
+    detail text NOT NULL DEFAULT '',
+    device_id text,
+    created_at double precision NOT NULL,
+    acknowledged_at double precision,
+    acknowledged_by text,
+    emailed_at double precision,
+    email_error text NOT NULL DEFAULT '',
+    UNIQUE (scope, level)
+  )`,
   `CREATE TABLE IF NOT EXISTS login_failures (key text NOT NULL, at double precision NOT NULL)`,
 ];
 

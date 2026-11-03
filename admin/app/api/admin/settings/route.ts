@@ -1,3 +1,4 @@
+import { checkSpendAlerts } from '@/lib/alerts';
 import { currentAdmin } from '@/lib/auth';
 import { readJson, respond } from '@/lib/api';
 import { logActivity } from '@/lib/fleet';
@@ -13,7 +14,10 @@ export async function PUT(request: Request) {
   return respond(async () => {
     const errors = await saveSettings((await readJson(request)) as unknown as PortalSettings);
     const saved = Object.keys(errors).length === 0;
-    if (saved) await logActivity(await currentAdmin(), 'Changed the limits and settings', null);
+    if (saved) {
+      await logActivity(await currentAdmin(), 'Changed the limits and settings', null);
+      await checkSpendAlerts(); // a lower limit may already be passed
+    }
     return { saved, errors };
   });
 }

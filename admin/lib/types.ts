@@ -32,6 +32,39 @@ export interface UsageData {
   devices: { id: string; name: string; cost: number; limit: number | null }[];
 }
 
+export interface PeriodRow {
+  label: string;
+  cost: number;
+  percentOfBudget: number | null;
+  breakdown: { name: string; cost: number }[];
+}
+
+export interface UsageHistoryData {
+  days: string[];
+  hasEarlier: boolean;
+  rows: { day: string; name: string; model: string; cost: number; responses: number }[];
+  months: PeriodRow[];
+  weeks: PeriodRow[];
+}
+
+export interface AlertView {
+  id: string;
+  severity: 'warn' | 'critical';
+  title: string;
+  detail: string;
+  device_id: string | null;
+  created_at: number;
+  acknowledged_by: string | null;
+  emailed_at: number | null;
+  email_error: string;
+}
+
+export interface AlertsData {
+  open: AlertView[];
+  past: AlertView[];
+  emailReady: boolean;
+}
+
 export interface ReleaseView {
   id: string;
   version: string;

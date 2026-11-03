@@ -23,6 +23,14 @@ export interface PortalSettings {
   heartbeatSeconds: number;
   /** Silent this long: shown as offline */
   offlineAfterSeconds: number;
+  /** Alert at these shares of a limit (reaching the limit itself always alerts) */
+  alertPercents: number[];
+  /** Alert when all PCs together spend this in one day; null: no alert */
+  dailyAlertUsd: number | null;
+  /** Alert when this month is heading over the budget */
+  paceAlert: boolean;
+  /** Who gets alerts by email */
+  alertEmails: string[];
   /** US dollars per 1M tokens */
   prices: Prices;
 }
@@ -35,6 +43,10 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   atLimit: 'warn',
   heartbeatSeconds: 60,
   offlineAfterSeconds: 180,
+  alertPercents: [50, 80, 100],
+  dailyAlertUsd: null,
+  paceAlert: true,
+  alertEmails: [],
   prices: {
     inText: 4,
     cachedText: 0.4,
@@ -70,6 +82,15 @@ export async function saveSettings(input: PortalSettings): Promise<Record<string
   if (!(input.offlineAfterSeconds >= input.heartbeatSeconds * 2)) {
     errors.offlineAfterSeconds = 'Allow at least two missed check-ins.';
   }
+  const percents = input.alertPercents;
+  if (!Array.isArray(percents) || !percents.every((p) => Number.isFinite(p) && p > 0 && p <= 100)) {
+    errors.alertPercents = 'Enter numbers from 1 to 100, separated by commas.';
+  }
+  if (!limit(input.dailyAlertUsd)) errors.dailyAlertUsd = 'Enter an amount above 0, or leave it empty.';
+  const emails = input.alertEmails;
+  if (!Array.isArray(emails) || !emails.every((e) => /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(e))) {
+    errors.alertEmails = 'Enter email addresses, separated by commas.';
+  }
   for (const key of Object.keys(DEFAULT_SETTINGS.prices) as (keyof Prices)[]) {
     if (!isPrice(input.prices?.[key])) errors[`prices.${key}`] = 'Enter a price of 0 or more.';
   }
@@ -82,6 +103,10 @@ export async function saveSettings(input: PortalSettings): Promise<Record<string
     atLimit: input.atLimit,
     heartbeatSeconds: input.heartbeatSeconds,
     offlineAfterSeconds: input.offlineAfterSeconds,
+    alertPercents: input.alertPercents,
+    dailyAlertUsd: input.dailyAlertUsd,
+    paceAlert: input.paceAlert === true,
+    alertEmails: input.alertEmails,
     prices: input.prices,
   };
   const db = await getDb();

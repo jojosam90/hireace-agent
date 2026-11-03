@@ -93,6 +93,27 @@ Limits are off until you set them. At a limit the portal only warns, unless you 
 then HireAce says the limit was reached and ends new calls; a call already open finishes. They count from the 1st
 of the month, UTC, and take up to one check-in to apply.
 
+## Spending alerts
+
+Set under **Usage**: alert at shares of a limit (50, 80 and 100% by default), when one day passes an amount, and
+when the month is on pace to go over the budget (from the 3rd of the month). Each alert is raised once, shows on the
+portal with a red count on Usage until acknowledged, and is emailed if `RESEND_API_KEY` and an address are set. Alerts
+only tell you. To stop spending use **Refuse new calls**, or a hard limit at OpenAI (below).
+
+Alerts run on the estimate, within one check-in of the usage. OpenAI's own spend alerts and hard limits (Organization
+limits, or Project settings > Limits) run on OpenAI's own tracked spend and a PC cannot get around them: set one as the backstop.
+
+## How fresh are the numbers?
+
+| Source | Freshness | Covers |
+| --- | --- | --- |
+| Each voice response, reported by the PC (what this portal shows) | About a minute, one check-in | Voice model only, per workstation, priced as an estimate |
+| OpenAI Usage API (`/v1/organization/usage/...`, Admin key) | Buckets of 1 minute, 1 hour or 1 day; OpenAI's reference states no delay | Whole organization, tokens, not per workstation |
+| OpenAI Costs API (`/v1/organization/costs`, Admin key), the "Billed by OpenAI" tile | Daily buckets only | Whole organization, real dollars |
+
+The first row is the freshest: every response from the model carries its token counts. For fresher numbers lower the
+check-in time under Usage (30 seconds at least).
+
 ## What this does not protect against
 
 All PCs share the OpenAI and LiveKit keys in the installer. Deactivating stops HireAce on a PC, but someone who
