@@ -56,19 +56,20 @@ export default function OverviewPage() {
   const { monthCostUsd, budgetUsd, warnPercent, onPaceUsd, billed } = usage.data;
 
   return (
-    <Page title="Overview">
+    <Page fillDesktop title="Overview">
       {(fleet.error || usage.error) && <Problem>Could not refresh. Showing the last known status.</Problem>}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Online" value={`${online.length}/${active.length}`} note={`${offline.length} offline`} icon={Wifi} />
-        <Stat label="HireAce up" value={up.length} note="All parts running" icon={CheckCircle2} />
-        <Stat label="In a call" value={inCall.length} note="Right now" icon={PhoneCall} />
+      <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat compact label="Online" value={`${online.length}/${active.length}`} note={`${offline.length} offline`} icon={Wifi} />
+        <Stat compact label="HireAce up" value={up.length} note="All parts running" icon={CheckCircle2} />
+        <Stat compact label="In a call" value={inCall.length} note="Right now" icon={PhoneCall} />
         <Stat
+          compact
           label="Spend this month"
           value={usd(billed ? billed.usd : monthCostUsd)}
           note={
             billed
-              ? 'Billed by OpenAI, whole organization'
+              ? 'Billed by OpenAI'
               : budgetUsd !== null
                 ? `Estimate, of ${usd(budgetUsd)}`
                 : `Estimate · on pace for ${usd(onPaceUsd)}`
@@ -79,89 +80,94 @@ export default function OverviewPage() {
         </Stat>
       </div>
 
-      {notices.length > 0 && (
-        <Card className="mt-4">
-          <CardTitle>Needs attention</CardTitle>
-          <ul className="divide-line divide-y">
-            {notices.map(({ key, tone, icon: Icon, text, href }) => (
-              <li key={key}>
-                <Link href={href} className="hover:text-brand-700 flex items-start gap-2.5 py-2.5 text-sm font-semibold">
-                  <Icon className={`mt-0.5 size-4 shrink-0 ${tone === 'bad' ? 'text-red-600' : 'text-amber-600'}`} aria-hidden />
-                  {text}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      {/* Large screens: all on one screen, the chart tall on the left, lists scrolling inside their cards */}
+      <div className="mt-4 grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-5 lg:grid-rows-[minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-3 lg:min-h-0">
+          {notices.length > 0 && (
+            <Card className="shrink-0">
+              <CardTitle>Needs attention</CardTitle>
+              <ul className="divide-line scroll-thin divide-y lg:max-h-20 lg:overflow-y-auto">
+                {notices.map(({ key, tone, icon: Icon, text, href }) => (
+                  <li key={key}>
+                    <Link href={href} className="hover:text-brand-700 flex items-start gap-2.5 py-2 text-sm font-semibold">
+                      <Icon className={`mt-0.5 size-4 shrink-0 ${tone === 'bad' ? 'text-red-600' : 'text-amber-600'}`} aria-hidden />
+                      {text}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardTitle
-            hint={
-              billed
-                ? 'Billed by OpenAI, whole organization. Last 30 days, UTC. Today can be low until OpenAI posts it.'
-                : 'Last 30 days, all workstations (estimate)'
-            }
-          >
-            OpenAI spend per day
-          </CardTitle>
-          <DailyBars daily={billed ? billed.days.slice(-30) : usage.data.daily} />
-        </Card>
+          <Card className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+            <CardTitle
+              hint={
+                billed
+                  ? 'Billed by OpenAI, whole organization, UTC. Today can be low until it posts.'
+                  : 'Last 30 days, all workstations (estimate)'
+              }
+            >
+              OpenAI spend per day
+            </CardTitle>
+            <DailyBars fill daily={billed ? billed.days.slice(-30) : usage.data.daily} />
+          </Card>
+        </div>
 
-        <Card className="lg:col-span-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <CardTitle>Workstations</CardTitle>
-            <Link href="/workstations" className="text-brand-700 text-sm font-bold">
-              See all
-            </Link>
-          </div>
-          {devices.length === 0 ? (
-            <Empty icon={Monitor} title="No workstations yet">
-              A PC appears here within a minute of installing HireAce with this portal&apos;s address.
-            </Empty>
-          ) : (
-            <ul className="divide-line divide-y">
-              {devices.slice(0, 6).map((device) => (
-                <li key={device.id}>
-                  <Link href={`/workstations/${device.id}`} className="flex items-center justify-between gap-3 py-2.5">
-                    <span className="min-w-0">
-                      <span className="block truncate font-bold">{device.name}</span>
-                      <span className="text-muted block text-xs">Checked in {ago(device.lastSeen)}</span>
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2 lg:min-h-0">
+          <Card className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+            <div className="flex items-baseline justify-between gap-2">
+              <CardTitle>Workstations</CardTitle>
+              <Link href="/workstations" className="text-brand-700 text-sm font-bold">
+                See all
+              </Link>
+            </div>
+            {devices.length === 0 ? (
+              <Empty icon={Monitor} title="No workstations yet">
+                A PC appears here within a minute of installing HireAce with this portal&apos;s address.
+              </Empty>
+            ) : (
+              <ul className="divide-line scroll-thin divide-y lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+                {devices.slice(0, 6).map((device) => (
+                  <li key={device.id}>
+                    <Link href={`/workstations/${device.id}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
+                      <span className="min-w-0">
+                        <span className="block truncate font-bold">{device.name}</span>
+                        <span className="text-muted block text-xs">Checked in {ago(device.lastSeen)}</span>
+                      </span>
+                      <StateBadge state={device.state} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {outdated > 0 && (
+              <Link href="/releases" className="bg-brand-50 text-brand-700 mt-3 block shrink-0 rounded-xl px-3 py-2 text-sm font-bold">
+                {outdated} not on the latest version ({fleet.data.latestVersion})
+              </Link>
+            )}
+          </Card>
+
+          <Card className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+            <CardTitle>Recent activity</CardTitle>
+            {!activity.data?.activity.length ? (
+              <p className="text-muted text-sm">Nothing yet.</p>
+            ) : (
+              <ul className="divide-line scroll-thin divide-y text-sm lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+                {activity.data.activity.slice(0, 20).map((row) => (
+                  <li key={row.id} className="flex flex-wrap justify-between gap-x-4 py-2">
+                    <span className="min-w-0 break-words">
+                      <strong>{row.action}</strong>
+                      {row.device && ` · ${row.device}`}
+                      {row.detail && row.detail !== row.device && <span className="text-muted"> · {row.detail}</span>}
                     </span>
-                    <StateBadge state={device.state} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          {outdated > 0 && (
-            <Link href="/releases" className="bg-brand-50 text-brand-700 mt-3 block rounded-xl px-3 py-2 text-sm font-bold">
-              {outdated} not on the latest version ({fleet.data.latestVersion})
-            </Link>
-          )}
-        </Card>
+                    <span className="text-muted">{ago(row.at)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
       </div>
-
-      <Card className="mt-4">
-        <CardTitle>Recent activity</CardTitle>
-        {!activity.data?.activity.length ? (
-          <p className="text-muted text-sm">Nothing yet.</p>
-        ) : (
-          <ul className="divide-line divide-y text-sm">
-            {activity.data.activity.slice(0, 6).map((row) => (
-              <li key={row.id} className="flex flex-wrap justify-between gap-x-4 py-2">
-                <span>
-                  <strong>{row.action}</strong>
-                  {row.device && ` · ${row.device}`}
-                  {row.detail && row.detail !== row.device && <span className="text-muted"> · {row.detail}</span>}
-                </span>
-                <span className="text-muted">{ago(row.at)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
     </Page>
   );
 }

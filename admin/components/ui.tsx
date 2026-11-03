@@ -16,11 +16,31 @@ import type { DeviceView } from '@/lib/types';
 
 /**
  * With fill, the page is exactly one screen tall (less the header, bottom bar and
- * spacing in shell.tsx) and a long list scrolls inside its own card.
+ * spacing in shell.tsx) and a long list scrolls inside its own card. fillDesktop does
+ * this on large screens only: on a phone the page scrolls as usual.
  */
-export function Page({ title, intro, actions, fill, children }: { title: string; intro?: string; actions?: ReactNode; fill?: boolean; children: ReactNode }) {
+export function Page({
+  title,
+  intro,
+  actions,
+  fill,
+  fillDesktop,
+  children,
+}: {
+  title: string;
+  intro?: string;
+  actions?: ReactNode;
+  fill?: boolean;
+  fillDesktop?: boolean;
+  children: ReactNode;
+}) {
+  const layout = fill
+    ? 'flex h-[calc(100dvh-188px)] min-h-[420px] flex-col lg:h-[calc(100dvh-4rem)]'
+    : fillDesktop
+      ? 'lg:flex lg:h-[calc(100dvh-4rem)] lg:min-h-[500px] lg:flex-col'
+      : undefined;
   return (
-    <div className={fill ? 'flex h-[calc(100dvh-188px)] min-h-[420px] flex-col lg:h-[calc(100dvh-4rem)]' : undefined}>
+    <div className={layout}>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{title}</h1>
@@ -168,14 +188,29 @@ export function IconButton({
   );
 }
 
-export function Stat({ label, value, note, icon: Icon, children }: { label: string; value: ReactNode; note?: ReactNode; icon?: LucideIcon; children?: ReactNode }) {
+export function Stat({
+  label,
+  value,
+  note,
+  icon: Icon,
+  compact,
+  children,
+}: {
+  label: string;
+  value: ReactNode;
+  note?: ReactNode;
+  icon?: LucideIcon;
+  /** Tighter on large screens, for pages that must fit one screen */
+  compact?: boolean;
+  children?: ReactNode;
+}) {
   return (
-    <Card>
+    <Card className={compact ? 'lg:py-3' : ''}>
       <div className="text-muted flex items-center justify-between gap-2 text-sm font-semibold">
         {label}
         {Icon && <Icon className="text-brand-600 size-5 shrink-0" aria-hidden />}
       </div>
-      <div className="mt-1 text-3xl font-extrabold tracking-tight">{value}</div>
+      <div className={`mt-1 text-3xl font-extrabold tracking-tight ${compact ? 'lg:mt-0 lg:text-2xl' : ''}`}>{value}</div>
       {note && <div className="text-muted mt-0.5 text-sm">{note}</div>}
       {children}
     </Card>

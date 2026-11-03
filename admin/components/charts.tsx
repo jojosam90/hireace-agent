@@ -11,14 +11,17 @@ function niceMax(value: number): number {
 }
 
 /** Spend per day: one series, so the title names it and there is no legend. */
-export function DailyBars({ daily }: { daily: { day: string; cost: number }[] }) {
+export function DailyBars({ daily, fill }: { daily: { day: string; cost: number }[]; fill?: boolean }) {
   const [active, setActive] = useState<number | null>(null);
   const [asTable, setAsTable] = useState(false);
   const top = niceMax(Math.max(...daily.map((row) => row.cost)));
   const shown = active === null ? null : daily[active];
 
+  // With fill, on large screens the chart takes the height its card has left
+  const height = fill ? 'h-44 lg:h-auto lg:min-h-20 lg:flex-1' : 'h-44';
+
   return (
-    <div>
+    <div className={fill ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : undefined}>
       <div className="mb-2 flex min-h-6 items-center justify-between gap-3 text-sm">
         <span className="text-muted" aria-live="polite">
           {shown ? (
@@ -35,7 +38,7 @@ export function DailyBars({ daily }: { daily: { day: string; cost: number }[] })
       </div>
 
       {asTable ? (
-        <div className="max-h-72 overflow-y-auto">
+        <div className={`scroll-thin max-h-72 overflow-y-auto ${fill ? 'lg:max-h-none lg:min-h-0 lg:flex-1' : ''}`}>
           <table className="w-full text-sm">
             <thead className="text-muted sticky top-0 bg-white text-left">
               <tr>
@@ -54,14 +57,14 @@ export function DailyBars({ daily }: { daily: { day: string; cost: number }[] })
           </table>
         </div>
       ) : (
-        <div className="flex gap-2">
-          <div className="text-muted flex h-44 w-10 shrink-0 flex-col justify-between text-right text-xs tabular-nums">
+        <div className={`flex gap-2 ${fill ? 'lg:min-h-0 lg:flex-1' : ''}`}>
+          <div className={`text-muted flex w-10 shrink-0 flex-col justify-between text-right text-xs tabular-nums ${fill ? 'h-44 lg:mb-5 lg:h-auto' : 'h-44'}`}>
             <span>{usd(top)}</span>
             <span>{usd(top / 2)}</span>
             <span>$0</span>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="relative h-44" onPointerLeave={() => setActive(null)}>
+          <div className={`min-w-0 flex-1 ${fill ? 'lg:flex lg:flex-col' : ''}`}>
+            <div className={`relative ${height}`} onPointerLeave={() => setActive(null)}>
               <div className="border-line pointer-events-none absolute inset-0 border-t border-b" />
               <div className="border-line pointer-events-none absolute inset-x-0 top-1/2 border-t" />
               <div className="absolute inset-0 flex items-stretch gap-0.5">
