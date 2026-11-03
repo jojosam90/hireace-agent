@@ -130,6 +130,44 @@ export function Button({
   );
 }
 
+const ICON_TONES = {
+  plain: 'text-ink hover:bg-brand-50',
+  brand: 'text-brand-700 hover:bg-brand-50',
+  danger: 'text-red-700 hover:bg-red-50',
+  good: 'text-emerald-700 hover:bg-emerald-50',
+};
+
+/** A small action in a table row. The tip is on a wrapper so it also shows when disabled. */
+export function IconButton({
+  icon: Icon,
+  label,
+  tip,
+  tone = 'plain',
+  disabled,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  tip: string;
+  tone?: keyof typeof ICON_TONES;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <span title={tip} className="inline-flex">
+      <button
+        type="button"
+        aria-label={label}
+        disabled={disabled}
+        onClick={onClick}
+        className={`border-line flex size-9 items-center justify-center rounded-lg border bg-white transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${ICON_TONES[tone]}`}
+      >
+        <Icon className="size-4" aria-hidden />
+      </button>
+    </span>
+  );
+}
+
 export function Stat({ label, value, note, icon: Icon, children }: { label: string; value: ReactNode; note?: ReactNode; icon?: LucideIcon; children?: ReactNode }) {
   return (
     <Card>

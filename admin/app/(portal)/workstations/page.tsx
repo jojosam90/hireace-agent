@@ -4,7 +4,7 @@ import { ChevronRight, Monitor, PackageCheck, PhoneCall, Power, RefreshCw, Searc
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { OrderDialog, type OrderType } from '@/components/orders';
-import { Badge, Button, Card, Empty, Loading, OrderNote, Page, Problem, StateBadge } from '@/components/ui';
+import { Badge, Button, Card, Empty, IconButton, Loading, OrderNote, Page, Problem, StateBadge } from '@/components/ui';
 import { usePoll } from '@/lib/client';
 import { ago, usd } from '@/lib/format';
 import type { DevicesData, DeviceView } from '@/lib/types';
@@ -17,12 +17,26 @@ const FILTERS: { key: string; label: string; test: (device: DeviceView) => boole
   { key: 'off', label: 'Deactivated', test: (d) => !d.active },
 ];
 
+interface Order {
+  type: OrderType;
+  deviceIds: string[];
+  name: string;
+}
+
+/** Why a workstation cannot take the latest version; empty when it can. */
+function installBlocked(device: DeviceView, latest: string | null): string {
+  if (!latest) return 'No release yet';
+  if (!device.active) return 'Deactivated';
+  if (device.version === latest) return `Already on ${latest}`;
+  return '';
+}
+
 export default function WorkstationsPage() {
   const { data, error, reload } = usePoll<DevicesData>('/api/admin/devices');
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [order, setOrder] = useState<OrderType | null>(null);
+  const [order, setOrder] = useState<Order | null>(null);
   const [message, setMessage] = useState('');
 
   const rows = useMemo(() => {
@@ -37,6 +51,7 @@ export default function WorkstationsPage() {
 
   if (!data) return error ? <Problem>{error}</Problem> : <Loading />;
 
+  const latest = data.latestVersion;
   const toggle = (id: string) =>
     setSelected((current) => {
       const next = new Set(current);
@@ -44,9 +59,70 @@ export default function WorkstationsPage() {
       return next;
     });
   const allShown = rows.length > 0 && rows.every((row) => selected.has(row.id));
-  const ids = data.devices.filter((device) => selected.has(device.id)).map((device) => device.id);
-  const selectedName =
-    ids.length === 1 ? data.devices.find((device) => device.id === ids[0])!.name : `${ids.length} workstations`;
+  const chosen = data.devices.filter((device) => selected.has(device.id));
+  const ask = (type: OrderType, devices: DeviceView[]) =>
+    setOrder({
+      type,
+      deviceIds: devices.map((device) => device.id),
+      name: devices.length === 1 ? devices[0].name : `${devices.length} workstations`,
+    });
+
+  // The three actions, for one workstation or for all those selected
+  const rowActions = (device: DeviceView) => (
+    <>
+      <IconButton
+        icon={PackageCheck}
+        label={latest ? `Install ${latest} on ${device.name}` : `Install the latest version on ${device.name}`}
+        tip={installBlocked(device, latest) || `Install ${latest}`}
+        tone="brand"
+        disabled={Boolean(installBlocked(device, latest))}
+        onClick={() => ask('update', [device])}
+      />
+      <IconButton
+        icon={RefreshCw}
+        label={`Restart ${device.name}`}
+        tip={device.active ? 'Restart' : 'Deactivated'}
+        disabled={!device.active}
+        onClick={() => ask('restart', [device])}
+      />
+      <IconButton
+        icon={Power}
+        label={`${device.active ? 'Deactivate' : 'Activate'} ${device.name}`}
+        tip={device.active ? 'Deactivate' : 'Activate'}
+        tone={device.active ? 'danger' : 'good'}
+        onClick={() => ask(device.active ? 'deactivate' : 'activate', [device])}
+      />
+    </>
+  );
+  const canInstall = chosen.filter((device) => !installBlocked(device, latest));
+  const canRestart = chosen.filter((device) => device.active);
+  const allOff = chosen.length > 0 && canRestart.length === 0;
+  const bulkActions = (
+    <>
+      <IconButton
+        icon={PackageCheck}
+        label={`Install the latest version on ${chosen.length} selected`}
+        tip={canInstall.length ? `Install ${latest} on ${canInstall.length}` : 'None of these can take it'}
+        tone="brand"
+        disabled={!canInstall.length}
+        onClick={() => ask('update', canInstall)}
+      />
+      <IconButton
+        icon={RefreshCw}
+        label={`Restart ${chosen.length} selected`}
+        tip={canRestart.length ? `Restart ${canRestart.length}` : 'All deactivated'}
+        disabled={!canRestart.length}
+        onClick={() => ask('restart', canRestart)}
+      />
+      <IconButton
+        icon={Power}
+        label={`${allOff ? 'Activate' : 'Deactivate'} ${chosen.length} selected`}
+        tip={allOff ? `Activate ${chosen.length}` : `Deactivate ${canRestart.length}`}
+        tone={allOff ? 'good' : 'danger'}
+        onClick={() => (allOff ? ask('activate', chosen) : ask('deactivate', canRestart))}
+      />
+    </>
+  );
 
   return (
     <Page
@@ -104,8 +180,7 @@ export default function WorkstationsPage() {
       ) : (
         <>
           {/* Wide screens: a table */}
-          {/* Room at the end so the bar for selected PCs never hides the last row */}
-          <Card className={`scroll-thin hidden min-h-0 flex-initial overflow-y-auto md:block ${ids.length ? 'px-0! pt-0! pb-20!' : 'p-0!'}`}>
+          <Card className="scroll-thin hidden min-h-0 flex-initial overflow-y-auto p-0! md:block">
             <table className="w-full text-sm">
               <thead className="bg-page text-muted sticky top-0 z-10 text-left">
                 <tr>
@@ -114,17 +189,25 @@ export default function WorkstationsPage() {
                       type="checkbox"
                       aria-label="Select all shown"
                       checked={allShown}
-                      onChange={() =>
-                        setSelected(allShown ? new Set() : new Set(rows.map((row) => row.id)))
-                      }
+                      onChange={() => setSelected(allShown ? new Set() : new Set(rows.map((row) => row.id)))}
                       className="accent-brand-600 size-4"
                     />
                   </th>
                   <th className="py-3 pr-3 font-semibold">Workstation</th>
                   <th className="py-3 pr-3 font-semibold">Status</th>
                   <th className="py-3 pr-3 font-semibold">Version</th>
-                  <th className="py-3 pr-3 text-right font-semibold">This month</th>
-                  <th className="py-3 pr-4 text-right font-semibold">Checked in</th>
+                  <th className="hidden py-3 pr-3 text-right font-semibold xl:table-cell">This month</th>
+                  <th className="py-3 pr-3 text-right font-semibold whitespace-nowrap">Checked in</th>
+                  <th className="py-2 pr-4 text-right font-semibold whitespace-nowrap">
+                    {chosen.length ? (
+                      <span className="flex items-center justify-end gap-1">
+                        <span className="text-ink mr-1 font-bold">{chosen.length} selected</span>
+                        {bulkActions}
+                      </span>
+                    ) : (
+                      'Actions'
+                    )}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -158,81 +241,103 @@ export default function WorkstationsPage() {
                     </td>
                     <td className="py-3 pr-3">
                       <span className="font-semibold">{device.version || 'Unknown'}</span>
-                      {data.latestVersion && device.version !== data.latestVersion && (
+                      {latest && device.version !== latest && (
                         <div className="text-xs font-semibold text-amber-800">Update available</div>
                       )}
                     </td>
-                    <td className="py-3 pr-3 text-right font-semibold tabular-nums">{usd(device.monthCostUsd)}</td>
-                    <td className="text-muted py-3 pr-4 text-right whitespace-nowrap">{ago(device.lastSeen)}</td>
+                    <td className="hidden py-3 pr-3 text-right font-semibold tabular-nums xl:table-cell">{usd(device.monthCostUsd)}</td>
+                    <td className="text-muted py-3 pr-3 text-right whitespace-nowrap">{ago(device.lastSeen)}</td>
+                    <td className="py-2 pr-4">
+                      <div className="flex justify-end gap-1">{rowActions(device)}</div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </Card>
 
-          {/* Phones: cards */}
-          <ul className={`scroll-thin min-h-0 flex-initial space-y-3 overflow-y-auto md:hidden ${ids.length ? 'pb-32' : ''}`}>
+          {/* Phones: cards, each with its own actions */}
+          {chosen.length > 0 && (
+            <div className="bg-brand-50 mb-3 flex items-center justify-between gap-2 rounded-xl px-3 py-2 md:hidden">
+              <span className="text-sm font-bold">{chosen.length} selected</span>
+              <span className="flex gap-1">{bulkActions}</span>
+            </div>
+          )}
+          <ul className="scroll-thin min-h-0 flex-initial space-y-3 overflow-y-auto md:hidden">
             {rows.map((device) => (
-              <li key={device.id} className="border-line flex gap-3 rounded-2xl border bg-white p-4 shadow-sm">
-                <input
-                  type="checkbox"
-                  aria-label={`Select ${device.name}`}
-                  checked={selected.has(device.id)}
-                  onChange={() => toggle(device.id)}
-                  className="accent-brand-600 mt-1 size-5 shrink-0"
-                />
-                <Link href={`/workstations/${device.id}`} className="min-w-0 flex-1">
-                  <span className="flex items-start justify-between gap-2">
-                    <span className="min-w-0">
-                      <span className="block truncate font-bold">{device.name}</span>
-                      <span className="text-muted block truncate text-xs">{device.windowsUser || device.hostname}</span>
+              <li key={device.id} className="border-line rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="flex gap-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${device.name}`}
+                    checked={selected.has(device.id)}
+                    onChange={() => toggle(device.id)}
+                    className="accent-brand-600 mt-1 size-5 shrink-0"
+                  />
+                  <Link href={`/workstations/${device.id}`} className="min-w-0 flex-1">
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="block truncate font-bold">{device.name}</span>
+                        <span className="text-muted block truncate text-xs">{device.windowsUser || device.hostname}</span>
+                      </span>
+                      <ChevronRight className="text-muted size-5 shrink-0" aria-hidden />
                     </span>
-                    <ChevronRight className="text-muted size-5 shrink-0" aria-hidden />
-                  </span>
-                  <span className="mt-2 flex flex-wrap gap-1.5">
-                    <StateBadge state={device.state} />
-                    {device.online && device.inCall && (
-                      <Badge tone="brand" icon={PhoneCall}>
-                        In a call
-                      </Badge>
-                    )}
-                    <OrderNote device={device} />
-                  </span>
-                  <span className="text-muted mt-2 flex flex-wrap justify-between gap-x-3 text-xs">
-                    <span>{device.version || 'Unknown version'}</span>
-                    <span>{usd(device.monthCostUsd)} this month</span>
-                    <span>{ago(device.lastSeen)}</span>
-                  </span>
-                </Link>
+                    <span className="mt-2 flex flex-wrap gap-1.5">
+                      <StateBadge state={device.state} />
+                      {device.online && device.inCall && (
+                        <Badge tone="brand" icon={PhoneCall}>
+                          In a call
+                        </Badge>
+                      )}
+                      <OrderNote device={device} />
+                    </span>
+                    <span className="text-muted mt-2 flex flex-wrap justify-between gap-x-3 text-xs">
+                      <span>{device.version || 'Unknown version'}</span>
+                      <span>{usd(device.monthCostUsd)} this month</span>
+                      <span>{ago(device.lastSeen)}</span>
+                    </span>
+                  </Link>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <Button
+                    icon={PackageCheck}
+                    aria-label={`Install the latest version on ${device.name}`}
+                    disabled={Boolean(installBlocked(device, latest))}
+                    onClick={() => ask('update', [device])}
+                    className="px-1! text-xs!"
+                  >
+                    Install
+                  </Button>
+                  <Button
+                    icon={RefreshCw}
+                    aria-label={`Restart ${device.name}`}
+                    disabled={!device.active}
+                    onClick={() => ask('restart', [device])}
+                    className="px-1! text-xs!"
+                  >
+                    Restart
+                  </Button>
+                  <Button
+                    icon={Power}
+                    aria-label={`${device.active ? 'Deactivate' : 'Activate'} ${device.name}`}
+                    onClick={() => ask(device.active ? 'deactivate' : 'activate', [device])}
+                    className="px-1! text-xs!"
+                  >
+                    {device.active ? 'Deactivate' : 'Activate'}
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
         </>
       )}
 
-      {ids.length > 0 && (
-        <div className="border-line fixed inset-x-3 bottom-20 z-30 flex flex-wrap items-center justify-between gap-2 rounded-2xl border bg-white p-3 shadow-xl lg:inset-x-auto lg:right-8 lg:bottom-6 lg:left-72">
-          <span className="text-sm font-bold">{ids.length} selected</span>
-          <div className="flex flex-wrap gap-2">
-            <Button kind="primary" icon={PackageCheck} disabled={!data.latestVersion} onClick={() => setOrder('update')}>
-              Install latest
-            </Button>
-            <Button icon={RefreshCw} onClick={() => setOrder('restart')}>
-              Restart
-            </Button>
-            <Button icon={Power} onClick={() => setOrder('deactivate')}>
-              Deactivate
-            </Button>
-          </div>
-        </div>
-      )}
-
       {order && (
         <OrderDialog
-          type={order}
-          deviceIds={ids}
-          name={selectedName}
-          version={data.latestVersion}
+          type={order.type}
+          deviceIds={order.deviceIds}
+          name={order.name}
+          version={latest}
           onClose={() => setOrder(null)}
           onDone={(text) => {
             setMessage(text);
