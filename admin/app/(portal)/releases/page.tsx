@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink, PackageCheck, ShieldCheck } from 'lucide-react';
+import { PackageCheck, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { OrderDialog } from '@/components/orders';
 import { Badge, Button, Card, Empty, Loading, Page, Problem } from '@/components/ui';
@@ -60,23 +60,9 @@ export default function ReleasesPage() {
                         {release.sizeBytes > 0 && ` · ${(release.sizeBytes / 1_048_576).toFixed(1)} MB`}
                       </p>
                       {release.notes && <p className="mt-2 text-sm whitespace-pre-line">{release.notes}</p>}
-                      <a
-                        href={release.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-disabled={updating > 0}
-                        tabIndex={updating > 0 ? -1 : undefined}
-                        title={updating > 0 ? 'A workstation is updating' : undefined}
-                        className={`mt-2 inline-flex items-center gap-1 text-sm font-bold ${
-                          updating > 0 ? 'text-muted pointer-events-none opacity-40' : 'text-brand-700'
-                        }`}
-                      >
-                        Download
-                        <ExternalLink className="size-3.5" aria-hidden />
-                      </a>
                     </div>
                     <Button
-                      kind={release.isLatest ? 'primary' : 'plain'}
+                      kind="soft"
                       icon={PackageCheck}
                       disabled={count === 0}
                       onClick={() => setChosen(release)}
