@@ -46,11 +46,8 @@ export function publicAccounts() {
   }));
 }
 
-/** "Mei Ling Wong" -> "MW" */
+/** "Mei Ling Wong" -> "ML" */
 export function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return '?';
-  const first = words[0][0];
-  const last = words.length > 1 ? words[words.length - 1][0] : '';
-  return (first + last).toUpperCase();
+  return words.length ? words.slice(0, 2).map((word) => word[0].toUpperCase()).join('') : '?';
 }

@@ -67,8 +67,8 @@ describe('accounts', () => {
     expect(publicAccounts()[0].prefillPassword).toBe('admin-password');
   });
 
-  it('makes initials from the first and last name', () => {
-    expect(initials('Mei Ling Wong')).toBe('MW');
+  it('makes initials from the first two names', () => {
+    expect(initials('Mei Ling Wong')).toBe('ML');
     expect(initials('Farah Lee')).toBe('FL');
     expect(initials('Administrator')).toBe('A');
     expect(initials('  ')).toBe('?');

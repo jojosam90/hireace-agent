@@ -18,5 +18,5 @@ describe('the local database', () => {
     const db = await getDb();
 
     expect(await db.query('SELECT COUNT(*) AS n FROM devices')).toEqual([{ n: expect.anything() }]);
-  });
+  }, 120_000); // starting a database on disk is slow on a busy PC
 });

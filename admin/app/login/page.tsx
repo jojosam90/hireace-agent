@@ -37,7 +37,6 @@ export default function LoginPage() {
 
   const chosenAccount = accounts?.find((account) => account.username === username);
   const saved = Boolean(chosenAccount?.remembered) && !typing && !chosenAccount?.prefillPassword;
-  const filledIn = saved || Boolean(chosenAccount?.prefillPassword && password === chosenAccount.prefillPassword);
 
   useEffect(() => {
     fetch('/api/auth/accounts', { cache: 'no-store' })
@@ -52,38 +51,21 @@ export default function LoginPage() {
       .catch(() => setError('Could not reach the server.'));
   }, []);
 
-  // The next step takes the cursor: Log in if the password is filled in, else the password
+  // Opening the page with one account: the cursor goes to the next step
   useEffect(() => {
-    if (!username) return;
-    if (filledIn) loginButton.current?.focus();
+    if (accounts?.length !== 1) return;
+    if (accounts[0].remembered || accounts[0].prefillPassword) loginButton.current?.focus();
     else passwordField.current?.focus();
-    // Only when the account changes, not while the password is being typed
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [username, saved]);
+  }, [accounts]);
 
-  function choose(account: PublicAccount) {
-    setUsername(account.username);
-    setTyping(false);
-    setPassword(account.prefillPassword ?? '');
-    setError('');
-  }
-
-  async function forgetDevice() {
-    await fetch('/api/auth/accounts', { method: 'DELETE' }).catch(() => undefined);
-    setAccounts((current) => current?.map((account) => ({ ...account, remembered: false })) ?? null);
-    setTyping(false);
-    setPassword('');
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function signIn(body: Record<string, unknown>) {
     setBusy(true);
     setError('');
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(saved ? { username, useRemembered: true } : { username, password, remember: rememberMe }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         window.location.href = '/';
@@ -95,6 +77,31 @@ export default function LoginPage() {
     }
     setBusy(false);
   }
+
+  /** A card logs straight in when the password is known; otherwise it asks for it. */
+  function choose(account: PublicAccount) {
+    setUsername(account.username);
+    setTyping(false);
+    setPassword(account.prefillPassword ?? '');
+    setError('');
+    if (account.prefillPassword) signIn({ username: account.username, password: account.prefillPassword });
+    else if (account.remembered) signIn({ username: account.username, useRemembered: true });
+    else passwordField.current?.focus();
+  }
+
+  async function forgetDevice() {
+    await fetch('/api/auth/accounts', { method: 'DELETE' }).catch(() => undefined);
+    setAccounts((current) => current?.map((account) => ({ ...account, remembered: false })) ?? null);
+    setTyping(false);
+    setPassword('');
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    signIn(saved ? { username, useRemembered: true } : { username, password, remember: rememberMe });
+  }
+
+  const known = accounts?.some((account) => account.remembered || account.prefillPassword);
 
   return (
     <main className="flex min-h-dvh flex-col bg-white lg:flex-row">
@@ -126,48 +133,25 @@ export default function LoginPage() {
 
       <section className="flex flex-1 items-center justify-center px-6 py-12 [@media(max-height:720px)]:py-5">
         <form onSubmit={submit} className="w-full max-w-xl">
-          <h2 className="text-4xl font-extrabold tracking-tight">Welcome back</h2>
-          <p className="text-muted mt-4">Log in to manage your HireAce workstations.</p>
+          <h2 className="text-4xl font-extrabold tracking-tight [@media(max-height:760px)]:text-3xl">Welcome back</h2>
+          <p className="text-muted mt-3">Log in to manage your HireAce workstations.</p>
 
-          <p id="choose-account" className="mt-8 font-semibold [@media(max-height:720px)]:mt-4">
-            Choose your account
-          </p>
-          {accounts?.length === 0 && (
-            <p className="text-muted mt-2 text-sm">No accounts are set up on the server yet.</p>
-          )}
-          <div
-            role="group"
-            aria-labelledby="choose-account"
-            className="scroll-thin mt-2 grid max-h-[19rem] grid-cols-1 gap-2 overflow-y-auto p-0.5 min-[360px]:grid-cols-2 [@media(max-height:720px)]:max-h-36"
-          >
-            {accounts?.map((account) => {
-              const chosen = username === account.username;
-              return (
-                <button
-                  key={account.username}
-                  type="button"
-                  aria-pressed={chosen}
-                  onClick={() => choose(account)}
-                  className={`flex min-w-0 items-center gap-2.5 rounded-xl border p-2.5 text-left transition-colors ${
-                    accounts.length === 1 ? 'min-[360px]:col-span-2' : ''
-                  } ${chosen ? 'border-brand-500 bg-brand-50' : 'border-line hover:bg-page bg-white'}`}
-                >
-                  <span
-                    className="text-brand-700 flex size-10 shrink-0 items-center justify-center rounded-full bg-[#ead9ff] text-sm font-bold"
-                    aria-hidden
-                  >
-                    {initials(account.name)}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate font-bold">{account.name}</span>
-                    <span className="text-muted block truncate text-sm">{account.role}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {/* For password managers: which account this password belongs to */}
-          <input type="text" name="username" autoComplete="username" value={username} readOnly tabIndex={-1} aria-hidden className="sr-only" />
+          <label htmlFor="username" className="mt-7 block font-semibold [@media(max-height:720px)]:mt-4">
+            Username
+          </label>
+          <input
+            id="username"
+            name="username"
+            autoComplete="username"
+            required
+            value={username}
+            onChange={(event) => {
+              setUsername(event.target.value);
+              setTyping(false);
+              setPassword('');
+            }}
+            className="bg-field border-line focus:border-brand-500 mt-2 h-12 w-full rounded-xl border px-4 outline-none focus:bg-white"
+          />
 
           <label htmlFor="password" className="mt-5 block font-semibold">
             Password
@@ -203,10 +187,6 @@ export default function LoginPage() {
               Remembered on this device.{' '}
               <button type="button" onClick={() => setTyping(true)} className="text-brand-700 font-bold">
                 Type it instead
-              </button>{' '}
-              ·{' '}
-              <button type="button" onClick={forgetDevice} className="text-brand-700 font-bold">
-                Forget this device
               </button>
             </p>
           ) : (
@@ -230,15 +210,63 @@ export default function LoginPage() {
           <button
             ref={loginButton}
             type="submit"
-            disabled={busy || !username}
-            className="bg-brand-600 hover:bg-brand-700 mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-lg font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={busy}
+            className="bg-brand-600 hover:bg-brand-700 mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-lg font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy && <LoaderCircle className="size-5 animate-spin" aria-hidden />}
-            {username || !accounts?.length ? 'Log in' : 'Choose your account first'}
+            Log in
           </button>
-          <p className="text-muted mt-5 text-center text-sm">
+          <p className="text-muted mt-3 text-center text-sm [@media(max-height:760px)]:hidden">
             Your session stays signed in for {SESSION_DAYS} days on this device.
           </p>
+
+          <p id="choose-account" className="text-muted mt-5 text-center text-sm [@media(max-height:760px)]:mt-3">
+            {accounts?.length === 0
+              ? 'No accounts are set up on the server yet.'
+              : known
+                ? 'Click an account to log in as that person.'
+                : 'Click your account, then enter your password.'}
+          </p>
+          <div
+            role="group"
+            aria-labelledby="choose-account"
+            className="scroll-thin mt-3 grid max-h-[19rem] grid-cols-1 gap-2.5 overflow-y-auto p-0.5 min-[360px]:grid-cols-2 [@media(max-height:760px)]:max-h-[9.5rem]"
+          >
+            {accounts?.map((account) => {
+              const chosen = username === account.username;
+              return (
+                <button
+                  key={account.username}
+                  type="button"
+                  aria-pressed={chosen}
+                  onClick={() => choose(account)}
+                  disabled={busy}
+                  className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left sm:gap-3 sm:p-2.5 transition-colors ${
+                    accounts.length === 1 ? 'min-[360px]:col-span-2' : ''
+                  } ${chosen ? 'border-brand-500 bg-brand-50' : 'border-line hover:bg-page bg-white'}`}
+                >
+                  <span
+                    className="text-brand-700 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#ead9ff] text-xs font-bold sm:size-10 sm:text-sm"
+                    aria-hidden
+                  >
+                    {initials(account.name)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold sm:text-base">{account.name}</span>
+                    <span className="text-muted block truncate text-xs sm:text-sm">{account.role}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {accounts?.some((account) => account.remembered) && (
+            <p className="text-muted mt-3 text-center text-sm">
+              This device remembers {accounts.filter((account) => account.remembered).length === 1 ? 'an account' : 'these accounts'}.{' '}
+              <button type="button" onClick={forgetDevice} className="text-brand-700 font-bold">
+                Forget this device
+              </button>
+            </p>
+          )}
         </form>
       </section>
     </main>

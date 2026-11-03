@@ -39,7 +39,7 @@ sends conversations, screens or emails.
 
 ## Who can sign in
 
-The login page shows a card for each account: tap yours, then enter your password. There is one account
+The login page shows a card for each account, under the form: click yours, then enter your password. If the password is known (below), the click logs straight in. There is one account
 (`ADMIN_USERNAME`) until you set `ADMIN_ACCOUNTS`, a line of JSON with a username, name, role and password hash for
 each person (`pnpm hash-password` makes a hash; see `.env.example`). Anyone who opens the page can see these names and
 roles. The Activity page records which account did what.
