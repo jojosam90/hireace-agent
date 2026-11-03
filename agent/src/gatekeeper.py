@@ -88,6 +88,8 @@ ALWAYS_ASK = {
 }
 
 
+_EMAIL_ADDRESS = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
+
 # Gmail is never opened: it is looked for in the browsers that are already open
 _GMAIL_HOSTS = {"mail.google.com", "gmail.com", "www.gmail.com"}
 GMAIL_NOT_OPEN = (
@@ -293,13 +295,16 @@ class Gatekeeper:
 
         return await self._execute(action, args)
 
-    async def show_open_gmail(self, session: str, action: str, args: dict) -> dict:
+    async def show_open_gmail(
+        self, session: str, action: str, args: dict, tab_text: str = "Gmail"
+    ) -> dict:
         """Asked to open Gmail: show the tab already open in a browser, or say there
-        is none. No browser and no tab is ever opened for it."""
+        is none. No browser and no tab is ever opened for it. tab_text picks one
+        account: Gmail's tab names carry its address."""
         found = None
         if self._desktop is not None:
             try:
-                found = await self._desktop.find_browser_tab("Gmail")
+                found = await self._desktop.find_browser_tab(tab_text)
             except DesktopError as exc:
                 return {"status": "error", "reason": str(exc)}
         opened = bool(found and found.get("found"))
@@ -668,9 +673,13 @@ def create_app(
                 {"state": "closed", "email": "", "reason": str(exc)}
             )
 
-    async def gmail_show(_: web.Request) -> web.Response:
+    async def gmail_show(request: web.Request) -> web.Response:
+        body = await request.json() if request.can_read_body else {}
+        email = str(body.get("email", "")) if isinstance(body, dict) else ""
+        # An address picks that account's tab; anything else is any Gmail tab
+        tab_text = email if _EMAIL_ADDRESS.fullmatch(email) else "Gmail"
         return web.json_response(
-            await gatekeeper.show_open_gmail("panel", "show_gmail", {})
+            await gatekeeper.show_open_gmail("panel", "show_gmail", {}, tab_text)
         )
 
     async def gmail_test(request: web.Request) -> web.Response:

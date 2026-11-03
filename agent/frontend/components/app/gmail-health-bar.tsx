@@ -14,14 +14,15 @@ const CHECK_EVERY_MS = 10_000;
 /**
  * A small bar on the PC's panel: is Gmail signed in, in any browser (Chrome, Edge...)?
  * Checked every 10 seconds, at once when the user comes back to the panel, and not
- * while it is minimized (each check costs the PC about a second of work). Clicking it
- * goes to the Gmail already open; it never opens a browser.
+ * while it is minimized (each check costs the PC about a second of work). One box per
+ * account found; clicking one goes to that account's open tab. It never opens a browser.
  */
 export function GmailHealthBar() {
   const { t } = useUiLanguage();
   const [health, setHealth] = useState<GmailHealth | null>(null);
   const [failed, setFailed] = useState(false);
-  const [notFound, setNotFound] = useState(false);
+  // Which box said its tab is gone, until the next check ('' is the box with no address)
+  const [notFound, setNotFound] = useState<string | null>(null);
   const [going, setGoing] = useState(false);
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export function GmailHealthBar() {
         if (!stopped) {
           setHealth(next);
           setFailed(false);
-          setNotFound(false);
+          setNotFound(null);
         }
       } catch {
         if (!stopped) setFailed(true);
@@ -56,34 +57,28 @@ export function GmailHealthBar() {
 
   if (!health && !failed) return null;
 
-  const goToGmail = async () => {
+  const goToGmail = async (email: string) => {
     setGoing(true);
     try {
-      const res = await fetch('/api/gmail/show', { method: 'POST' });
-      setNotFound(!res.ok || (await res.json()).status !== 'done');
+      const res = await fetch('/api/gmail/show', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(email ? { email } : {}),
+      });
+      setNotFound(!res.ok || (await res.json()).status !== 'done' ? email : null);
     } catch {
-      setNotFound(true);
+      setNotFound(email);
     } finally {
       setGoing(false);
     }
   };
 
   const connected = !failed && health?.connected;
-  const where = (health?.accounts ?? []).map((a) => `${a.browser} · ${a.email}`).join(', ');
-  const text = notFound
-    ? t('gmailBarNotFound')
-    : connected
-      ? where
-        ? t('gmailBarConnectedIn', { where })
-        : t('gmailBarConnected')
-      : failed || !health?.checked
-        ? t('gmailBarUnknown')
-        : t('gmailBarNotConnected');
-  const box = 'mt-3 w-full max-w-xs rounded-xl border px-3 py-2 text-left text-xs';
-  const content = (
+  const box = 'w-full rounded-xl border px-3 py-2 text-left text-xs';
+  const line = (text: string, on: boolean) => (
     <div className="flex items-start gap-2">
       <span
-        className={`mt-1 size-2 shrink-0 rounded-full ${connected && !notFound ? 'bg-emerald-500' : 'bg-zinc-400'}`}
+        className={`mt-1 size-2 shrink-0 rounded-full ${on ? 'bg-emerald-500' : 'bg-zinc-400'}`}
         aria-hidden
       />
       <span className="min-w-0 font-medium break-words">{text}</span>
@@ -91,21 +86,38 @@ export function GmailHealthBar() {
   );
 
   if (!connected) {
+    const text = failed || !health?.checked ? t('gmailBarUnknown') : t('gmailBarNotConnected');
     return (
-      <div role="status" className={box} title={text}>
-        {content}
+      <div role="status" className={`mt-3 max-w-xs ${box}`} title={text}>
+        {line(text, false)}
       </div>
     );
   }
+
+  // Connected, but no address read from any tab: one box for Gmail as a whole
+  const accounts = health?.accounts.length ? health.accounts : [{ browser: '', email: '' }];
   return (
-    <button
-      type="button"
-      onClick={goToGmail}
-      disabled={going}
-      className={`${box} hover:bg-muted cursor-pointer transition-colors disabled:cursor-wait`}
-      title={t('gmailBarGoTo')}
-    >
-      {content}
-    </button>
+    <div className="mt-3 flex w-full max-w-xs flex-col gap-2">
+      {accounts.map(({ browser, email }) => {
+        const gone = notFound === email;
+        const text = gone
+          ? t('gmailBarNotFound')
+          : email
+            ? t('gmailBarConnectedIn', { where: `${browser} · ${email}` })
+            : t('gmailBarConnected');
+        return (
+          <button
+            key={`${browser}-${email}`}
+            type="button"
+            onClick={() => goToGmail(email)}
+            disabled={going}
+            className={`${box} hover:bg-muted cursor-pointer transition-colors disabled:cursor-wait`}
+            title={t('gmailBarGoTo')}
+          >
+            {line(text, !gone)}
+          </button>
+        );
+      })}
+    </div>
   );
 }

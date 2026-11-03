@@ -756,3 +756,29 @@ async def test_clicking_the_gmail_bar_only_shows_the_open_tab(gmail, audit_path,
     assert result["status"] == ("done" if found else "error")
     assert tabs.looked_for == ["Gmail"]
     assert browser.calls == [] and gmail.opened == 0  # nothing was opened
+
+
+@pytest.mark.parametrize(
+    ("body", "looked_for"),
+    [
+        ({"email": "a@b.example"}, "a@b.example"),
+        ({}, "Gmail"),
+        ({"email": "not an address"}, "Gmail"),
+        ([], "Gmail"),
+    ],
+)
+async def test_a_box_on_the_gmail_bar_goes_to_its_own_account(gmail, audit_path, body, looked_for):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from emailer import Emailer
+    from gatekeeper import create_app
+
+    browser = FakeBrowser()
+    tabs = GmailTabs(found=True)
+    gk = Gatekeeper(browser, desktop=tabs, emailer=Emailer(gmail), audit_path=audit_path)
+    async with TestClient(TestServer(create_app(gk, "secret"))) as client:
+        answer = await client.post("/v1/gmail/show", json=body, headers=TOKEN)
+        assert (await answer.json())["status"] == "done"
+
+    assert tabs.looked_for == [looked_for]
+    assert browser.calls == [] and gmail.opened == 0
