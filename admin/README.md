@@ -44,6 +44,11 @@ The login page shows a card for each account: tap yours, then enter your passwor
 each person (`pnpm hash-password` makes a hash; see `.env.example`). Anyone who opens the page can see these names and
 roles. The Activity page records which account did what.
 
+After logging in once with **Remember me on this device**, tapping that card on that device shows the password filled in,
+for 30 days from the last use. The device keeps a signed cookie, not the password, and it stops working when the password
+or `SESSION_SECRET` changes. Other devices still have to type the password. Do not tick it on a shared PC. Anyone using a
+remembered device can log in as that person, so lock the device; **Forget this device** on the login page ends it.
+
 ## Run it on this PC
 
 ```powershell

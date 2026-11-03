@@ -1,6 +1,8 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { fail, readJson, respond } from '@/lib/api';
 import { login } from '@/lib/auth';
+import { DEVICE_COOKIE, DEVICE_DAYS, rememberedAccounts, signRemembered } from '@/lib/remember';
 import { SESSION_COOKIE, SESSION_DAYS, signSession } from '@/lib/session';
 
 const REFUSALS = {
@@ -13,18 +15,28 @@ export async function POST(request: Request) {
   return respond(async () => {
     const body = await readJson(request);
     const username = String(body.username ?? '');
-    const address = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
-    const result = await login(username, String(body.password ?? ''), address);
-    if (result !== 'ok') return fail(REFUSALS[result][0], REFUSALS[result][1]);
+    const store = await cookies();
+    const remembered = await rememberedAccounts(store.get(DEVICE_COOKIE)?.value);
 
+    if (body.useRemembered === true) {
+      // Only from the portal's own page
+      const origin = request.headers.get('origin');
+      if (!origin || new URL(origin).host !== request.headers.get('host')) return fail('Not allowed from another site.', 403);
+      if (!remembered.includes(username)) return fail('Enter your password on this device.', 401);
+    } else {
+      const address = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
+      const result = await login(username, String(body.password ?? ''), address);
+      if (result !== 'ok') return fail(REFUSALS[result][0], REFUSALS[result][1]);
+    }
+
+    const secure = (request.headers.get('x-forwarded-proto') ?? new URL(request.url).protocol).startsWith('https');
+    const options = { httpOnly: true, sameSite: 'lax', secure, path: '/' } as const;
     const response = NextResponse.json({ ok: true });
-    response.cookies.set(SESSION_COOKIE, await signSession(username), {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: (request.headers.get('x-forwarded-proto') ?? new URL(request.url).protocol).startsWith('https'),
-      path: '/',
-      maxAge: SESSION_DAYS * 86_400,
-    });
+    response.cookies.set(SESSION_COOKIE, await signSession(username), { ...options, maxAge: SESSION_DAYS * 86_400 });
+    if (body.useRemembered === true || body.remember === true) {
+      const device = await signRemembered([...new Set([...remembered, username])]);
+      response.cookies.set(DEVICE_COOKIE, device, { ...options, maxAge: DEVICE_DAYS * 86_400 });
+    }
     return response;
   });
 }

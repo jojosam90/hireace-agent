@@ -16,16 +16,25 @@ interface PublicAccount {
   username: string;
   name: string;
   role: string;
+  /** This device logged in as them before: no need to type the password */
+  remembered: boolean;
 }
 
 export default function LoginPage() {
   const [accounts, setAccounts] = useState<PublicAccount[] | null>(null);
   const passwordField = useRef<HTMLInputElement>(null);
+  const loginButton = useRef<HTMLButtonElement>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  // Chosen to type the password even though this device remembers the account
+  const [typing, setTyping] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const chosenAccount = accounts?.find((account) => account.username === username);
+  const saved = Boolean(chosenAccount?.remembered) && !typing;
 
   useEffect(() => {
     fetch('/api/auth/accounts', { cache: 'no-store' })
@@ -37,10 +46,25 @@ export default function LoginPage() {
       .catch(() => setError('Could not reach the server.'));
   }, []);
 
+  // The next step takes the cursor: Log in if the password is filled in, else the password
+  useEffect(() => {
+    if (!username) return;
+    if (saved) loginButton.current?.focus();
+    else passwordField.current?.focus();
+  }, [username, saved]);
+
   function choose(account: PublicAccount) {
     setUsername(account.username);
+    setTyping(false);
+    setPassword('');
     setError('');
-    passwordField.current?.focus();
+  }
+
+  async function forgetDevice() {
+    await fetch('/api/auth/accounts', { method: 'DELETE' }).catch(() => undefined);
+    setAccounts((current) => current?.map((account) => ({ ...account, remembered: false })) ?? null);
+    setTyping(false);
+    setPassword('');
   }
 
   async function submit(event: FormEvent) {
@@ -51,7 +75,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(saved ? { username, useRemembered: true } : { username, password, remember: rememberMe }),
       });
       if (res.ok) {
         window.location.href = '/';
@@ -144,22 +168,50 @@ export default function LoginPage() {
             <input
               id="password"
               ref={passwordField}
-              type={show ? 'text' : 'password'}
-              autoComplete="current-password"
-              required
-              value={password}
+              type={show && !saved ? 'text' : 'password'}
+              autoComplete={saved ? 'off' : 'current-password'}
+              required={!saved}
+              readOnly={saved}
+              // Only dots to show it is filled in: the browser never receives the password
+              value={saved ? 'remembered-device' : password}
+              aria-label={saved ? 'Password remembered on this device' : undefined}
               onChange={(event) => setPassword(event.target.value)}
               className="bg-field border-line focus:border-brand-500 h-12 w-full rounded-xl border pr-12 pl-4 outline-none focus:bg-white"
             />
-            <button
-              type="button"
-              onClick={() => setShow(!show)}
-              aria-label={show ? 'Hide the password' : 'Show the password'}
-              className="text-muted absolute top-0 right-0 flex size-12 items-center justify-center"
-            >
-              {show ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
-            </button>
+            {!saved && (
+              <button
+                type="button"
+                onClick={() => setShow(!show)}
+                aria-label={show ? 'Hide the password' : 'Show the password'}
+                className="text-muted absolute top-0 right-0 flex size-12 items-center justify-center"
+              >
+                {show ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+              </button>
+            )}
           </div>
+
+          {saved ? (
+            <p className="text-muted mt-2 text-sm">
+              Remembered on this device.{' '}
+              <button type="button" onClick={() => setTyping(true)} className="text-brand-700 font-bold">
+                Type it instead
+              </button>{' '}
+              ·{' '}
+              <button type="button" onClick={forgetDevice} className="text-brand-700 font-bold">
+                Forget this device
+              </button>
+            </p>
+          ) : (
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(event) => setRememberMe(event.target.checked)}
+                className="accent-brand-600 size-4"
+              />
+              Remember me on this device (not on a shared PC)
+            </label>
+          )}
 
           {error && (
             <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -168,6 +220,7 @@ export default function LoginPage() {
           )}
 
           <button
+            ref={loginButton}
             type="submit"
             disabled={busy || !username}
             className="bg-brand-600 hover:bg-brand-700 mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-lg font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
