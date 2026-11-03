@@ -44,10 +44,7 @@ The login page shows a card for each account, under the form: click yours, then 
 each person (`pnpm hash-password` makes a hash; see `.env.example`). Anyone who opens the page can see these names and
 roles. The Activity page records which account did what.
 
-After logging in once with **Remember me on this device**, tapping that card on that device shows the password filled in,
-for 30 days from the last use. The device keeps a signed cookie, not the password, and it stops working when the password
-or `SESSION_SECRET` changes. Other devices still have to type the password. Do not tick it on a shared PC. Anyone using a
-remembered device can log in as that person, so lock the device; **Forget this device** on the login page ends it.
+After a person logs in with their password, that device remembers them for 30 days from the last use: clicking their card logs straight in. The device keeps a signed cookie, not the password. **Sign out** ends it, as does a change of the password or `SESSION_SECRET`, so sign out on a shared PC. Other devices still have to type the password.
 
 `ADMIN_PREFILL_PASSWORD` (or `prefillPassword` for an account in `ADMIN_ACCOUNTS`) fills the real password in on every
 device. It is off unless set. It sends the password to anyone who opens the login page, so on a site reachable from the

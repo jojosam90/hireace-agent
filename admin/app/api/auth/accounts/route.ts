@@ -13,10 +13,3 @@ export async function GET() {
     accounts: publicAccounts().map((account) => ({ ...account, remembered: remembered.includes(account.username) })),
   });
 }
-
-// "Forget this device"
-export async function DELETE() {
-  const response = NextResponse.json({ ok: true });
-  response.cookies.delete(DEVICE_COOKIE);
-  return response;
-}
