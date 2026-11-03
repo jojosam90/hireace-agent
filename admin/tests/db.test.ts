@@ -19,4 +19,18 @@ describe('the local database', () => {
 
     expect(await db.query('SELECT COUNT(*) AS n FROM devices')).toEqual([{ n: expect.anything() }]);
   }, 120_000); // starting a database on disk is slow on a busy PC
+
+  it('starts on Vercel without DATABASE_URL, so sign-in still works', async () => {
+    delete process.env.DATABASE_URL;
+    process.env.VERCEL = '1';
+    resetDbForTests();
+
+    try {
+      const db = await getDb();
+
+      expect(await db.query('SELECT COUNT(*) AS n FROM login_failures')).toEqual([{ n: expect.anything() }]);
+    } finally {
+      delete process.env.VERCEL;
+    }
+  }, 120_000);
 });

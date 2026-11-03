@@ -110,9 +110,9 @@ async function connect(): Promise<Db> {
     const sql = neon(url);
     db = { query: async (text, params = []) => (await sql.query(text, params)) as never };
   } else {
-    if (process.env.VERCEL) throw new Error('DATABASE_URL is not set.');
     const { PGlite } = await import('@electric-sql/pglite');
-    const folder = process.env.ADMIN_DATA_DIR ?? '.data/pglite';
+    // Vercel has no lasting disk: without DATABASE_URL sign-in works, but data lasts only as long as the server
+    const folder = process.env.VERCEL ? 'memory://' : (process.env.ADMIN_DATA_DIR ?? '.data/pglite');
     // It makes only its own last folder, not the ones above
     if (!folder.includes('://')) await mkdir(folder, { recursive: true });
     const pg = new PGlite(folder);
