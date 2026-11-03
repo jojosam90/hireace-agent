@@ -60,7 +60,7 @@ describe('joining', () => {
 });
 
 describe('status', () => {
-  it('online means checked in lately; up or down is about HireAce itself', async () => {
+  it('online means HireAce is running; closed or silent is offline', async () => {
     const { deviceId, token } = await join();
     await heartbeat(token, up, NOW);
     expect((await device(deviceId)).state).toBe('up');
@@ -69,14 +69,16 @@ describe('status', () => {
     expect((await device(deviceId)).state).toBe('partial');
 
     await heartbeat(token, { parts: {} }, NOW);
-    const down = await device(deviceId);
-    expect(down.state).toBe('down');
-    expect(down.online).toBe(true);
+    const closed = await device(deviceId);
+    expect(closed.state).toBe('offline');
+    expect(closed.online).toBe(false);
+    expect(closed.reachable).toBe(true); // orders can still reach it
 
     const later = NOW + (DEFAULT_SETTINGS.offlineAfterSeconds + 1) * 1000;
     const gone = await device(deviceId, later);
     expect(gone.state).toBe('offline');
     expect(gone.online).toBe(false);
+    expect(gone.reachable).toBe(false);
   });
 });
 

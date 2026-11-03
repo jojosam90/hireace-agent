@@ -4,17 +4,16 @@ import { ChevronRight, Monitor, PackageCheck, PhoneCall, Power, RefreshCw, Searc
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { OrderDialog, type OrderType } from '@/components/orders';
-import { Badge, Button, Card, Empty, IconButton, Loading, OrderNote, Page, Problem, StateBadge } from '@/components/ui';
+import { Badge, Button, Card, Empty, IconButton, Loading, OrderNote, Page, Problem, RefreshTimer, StateBadge } from '@/components/ui';
 import { usePoll } from '@/lib/client';
 import { ago, usd } from '@/lib/format';
 import type { DevicesData, DeviceView } from '@/lib/types';
 
-// short: what fits on a phone, where the five share one row
+// short: what fits on a phone, where they share one row
 const FILTERS: { key: string; label: string; short: string; test: (device: DeviceView) => boolean }[] = [
   { key: 'all', label: 'All', short: 'All', test: () => true },
   { key: 'online', label: 'Online', short: 'Online', test: (d) => d.active && d.online },
   { key: 'offline', label: 'Offline', short: 'Offline', test: (d) => d.active && !d.online },
-  { key: 'down', label: 'HireAce down', short: 'Down', test: (d) => d.state === 'down' || d.state === 'partial' },
   { key: 'off', label: 'Deactivated', short: 'Inactive', test: (d) => !d.active },
 ];
 
@@ -37,7 +36,7 @@ function installBlocked(device: DeviceView, latest: string | null): string {
 }
 
 export default function WorkstationsPage() {
-  const { data, error, reload } = usePoll<DevicesData>('/api/admin/devices', 5_000);
+  const { data, error, reload, lastAt, everyMs } = usePoll<DevicesData>('/api/admin/devices', 5_000);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -134,8 +133,9 @@ export default function WorkstationsPage() {
   return (
     <Page
       fill
+      actions={<RefreshTimer lastAt={lastAt} everyMs={everyMs} onRefresh={reload} />}
       title="Workstations"
-      intro={`Each PC checks in every ${data.heartbeatSeconds} seconds. It shows as offline after ${Math.round(data.offlineAfterSeconds / 60)} minutes of silence.`}
+      intro="Online means HireAce is running on that PC. It shows as offline within seconds of being closed."
     >
       {error && <Problem>Could not refresh. Showing the last known status.</Problem>}
       {message && (
@@ -156,11 +156,11 @@ export default function WorkstationsPage() {
             className="border-line focus:border-brand-500 h-10 w-full rounded-xl border bg-white pr-3 pl-10 text-sm outline-none"
           />
         </div>
-        {/* Phones: one neat bar of five equal parts. Wider: separate pills. */}
+        {/* Phones: one neat bar of equal parts. Wider: separate pills. */}
         <div
           role="group"
           aria-label="Show"
-          className="border-line grid grid-cols-5 gap-0.5 rounded-xl border bg-white p-1 sm:flex sm:gap-1.5 sm:border-0 sm:bg-transparent sm:p-0"
+          className="border-line grid grid-cols-4 gap-0.5 rounded-xl border bg-white p-1 sm:flex sm:gap-1.5 sm:border-0 sm:bg-transparent sm:p-0"
         >
           {FILTERS.map(({ key, label, short }) => (
             <button

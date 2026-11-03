@@ -19,8 +19,10 @@ export async function call<T = Record<string, unknown>>(url: string, method = 'G
 export function usePoll<T>(url: string, everyMs = 15_000) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState('');
+  const [lastAt, setLastAt] = useState(() => Date.now());
 
   const reload = useCallback(async () => {
+    setLastAt(Date.now());
     try {
       setData(await call<T>(url));
       setError('');
@@ -41,5 +43,5 @@ export function usePoll<T>(url: string, everyMs = 15_000) {
     };
   }, [reload, everyMs]);
 
-  return { data, error, reload };
+  return { data, error, reload, lastAt, everyMs };
 }

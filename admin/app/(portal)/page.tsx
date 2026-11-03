@@ -3,7 +3,7 @@
 import { AlertTriangle, CheckCircle2, Monitor, PhoneCall, Wallet, Wifi, XCircle, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { DailyBars } from '@/components/charts';
-import { Card, CardTitle, Empty, Loading, Meter, Page, Problem, Stat, StateBadge } from '@/components/ui';
+import { Card, CardTitle, Empty, Loading, Meter, Page, Problem, RefreshTimer, Stat, StateBadge } from '@/components/ui';
 import { usePoll } from '@/lib/client';
 import { ago, usd } from '@/lib/format';
 import type { ActivityRow, AlertsData, DevicesData, UsageData } from '@/lib/types';
@@ -56,7 +56,22 @@ export default function OverviewPage() {
   const { monthCostUsd, budgetUsd, warnPercent, onPaceUsd, billed } = usage.data;
 
   return (
-    <Page fillDesktop title="Overview">
+    <Page
+      fillDesktop
+      title="Overview"
+      actions={
+        <RefreshTimer
+          lastAt={fleet.lastAt}
+          everyMs={fleet.everyMs}
+          onRefresh={() => {
+            fleet.reload();
+            usage.reload();
+            spending.reload();
+            activity.reload();
+          }}
+        />
+      }
+    >
       {(fleet.error || usage.error) && <Problem>Could not refresh. Showing the last known status.</Problem>}
 
       <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">

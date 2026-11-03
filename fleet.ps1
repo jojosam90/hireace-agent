@@ -6,9 +6,9 @@
   Runs from Windows sign-in with no window (fleet.vbs), whether or not HireAce is open, so
   the portal can tell "this PC is offline" from "HireAce is closed" and can still restart or
   update it. A PC behind a router cannot be reached from the internet, so it calls out: it
-  checks in every minute, and the answer carries any order. A call starting or ending is
-  reported within seconds, by asking HireAce on this PC every 5 seconds. Its only other
-  work is a few local checks, so it is idle almost all the time.
+  checks in every minute, and the answer carries any order. HireAce opening or closing and
+  a call starting or ending are reported within seconds, by asking HireAce on this PC every
+  5 seconds. Its only other work is a few local checks, so it is idle almost all the time.
 
   Sends: PC and Windows user name, HireAce version, which parts are running, whether a call is
   on, free memory and disk, and token counts. Never the conversations, screens or emails.
@@ -55,6 +55,8 @@ $sending = Join-Path $DataDir 'usage.sending'
 $script:results = New-Object System.Collections.ArrayList
 $script:interval = 60
 $script:reportedCall = $false
+$script:reportedUp = $false
+$script:reportedAll = $true
 $monitorScript = Join-Path $Root 'fleet.ps1'
 $startedFrom = (Get-Item $monitorScript).LastWriteTimeUtc
 
@@ -241,6 +243,8 @@ function Invoke-CheckIn {
   }
   # The portal has them now
   $script:reportedCall = [bool]$report.inCall
+  $script:reportedUp = [bool]$report.parts.gatekeeper
+  $script:reportedAll = $report.parts.gatekeeper -and $report.parts.agent -and $report.parts.web
   $script:results.Clear()
   if ($report.usage -and (Test-Path $sending)) { Remove-Item -Force $sending }
   if ($report.results | Where-Object { $_.status -ne 'running' -and (Test-Path $statusFile) }) {
@@ -260,10 +264,13 @@ while ($true) {
   if ($Once) { break }
   # An update replaced this script: start again on the new one (fleet.vbs does it)
   if ((Test-Path $monitorScript) -and (Get-Item $monitorScript).LastWriteTimeUtc -ne $startedFrom) { exit 0 }
-  # Until the next check-in, or sooner if a call has started or ended
+  # Until the next check-in, or sooner if HireAce opened or closed or a call started or ended.
+  # Starting up, its parts arrive one by one: look again soon until they are all there.
   $nextCheckIn = (Get-Date).AddSeconds($script:interval)
+  if ($script:reportedUp -and -not $script:reportedAll) { $nextCheckIn = (Get-Date).AddSeconds(10) }
   while ((Get-Date) -lt $nextCheckIn) {
     Start-Sleep -Seconds 5
+    if ((Test-HireAcePart 'gatekeeper') -ne $script:reportedUp) { break }
     if ((Test-InCall) -ne $script:reportedCall) { break }
   }
   [GC]::Collect()

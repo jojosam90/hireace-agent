@@ -63,7 +63,7 @@ function Test-Url([string]$url) {
 
 function Test-HireAcePart([ValidateSet('gatekeeper', 'web', 'agent')][string]$part) {
   switch ($part) {
-    'gatekeeper' { Test-Url 'http://127.0.0.1:8080/healthz' }
+    'gatekeeper' { Test-Url "$(if ($GatekeeperUrl) { $GatekeeperUrl } else { 'http://127.0.0.1:8080' })/healthz" }
     'web' { Test-Url 'http://127.0.0.1:3001/' }
     'agent' {
       [bool](Get-CimInstance Win32_Process -Filter "Name = 'python.exe' AND CommandLine LIKE '%src/agent.py%'" |

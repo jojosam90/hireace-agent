@@ -17,7 +17,7 @@ const STUCK_AFTER = HOUR;
 
 export type CommandType = 'restart' | 'update';
 export type CommandStatus = 'pending' | 'sent' | 'running' | 'done' | 'failed' | 'expired' | 'cancelled';
-export type DeviceState = 'deactivated' | 'offline' | 'updating' | 'up' | 'partial' | 'down';
+export type DeviceState = 'deactivated' | 'offline' | 'updating' | 'up' | 'partial';
 
 export interface DeviceRow {
   id: string;
@@ -125,7 +125,8 @@ export function deviceState(
   if (now - device.last_seen > settings.offlineAfterSeconds * 1000) return 'offline';
   if (updating) return 'updating';
   const parts = [device.part_gatekeeper, device.part_agent, device.part_web].filter(Boolean).length;
-  return parts === 3 ? 'up' : parts === 0 ? 'down' : 'partial';
+  // HireAce closed counts as offline, even though the PC's monitor still checks in
+  return parts === 3 ? 'up' : parts === 0 ? 'offline' : 'partial';
 }
 
 export async function logActivity(
@@ -481,7 +482,10 @@ export interface DeviceView {
   license: string;
   version: string;
   state: DeviceState;
+  /** HireAce is running there */
   online: boolean;
+  /** The PC's monitor checks in, so orders reach it even when HireAce is closed */
+  reachable: boolean;
   active: boolean;
   inCall: boolean;
   lastSeen: number;
@@ -517,6 +521,8 @@ export async function listDevices(now = Date.now()): Promise<DeviceView[]> {
   return devices.map((device) => {
     const current = order.get(device.id);
     const updating = current?.type === 'update' && current.status !== 'pending';
+    const state = deviceState(device, settings, updating, now);
+    const reachable = now - device.last_seen <= settings.offlineAfterSeconds * 1000;
     return {
       id: device.id,
       name: device.label || device.hostname || 'Unnamed PC',
@@ -525,8 +531,9 @@ export async function listDevices(now = Date.now()): Promise<DeviceView[]> {
       windowsUser: device.windows_user,
       license: device.license,
       version: device.version,
-      state: deviceState(device, settings, updating, now),
-      online: now - device.last_seen <= settings.offlineAfterSeconds * 1000,
+      state,
+      online: reachable && state !== 'offline',
+      reachable,
       active: device.active,
       inCall: device.in_call,
       lastSeen: device.last_seen,

@@ -114,7 +114,11 @@ export default function WorkstationPage() {
           </Button>
         </div>
         {!device.online && device.active && (
-          <p className="text-muted mt-3 text-sm">This PC is offline. Orders wait until it is back, if they have not expired.</p>
+          <p className="text-muted mt-3 text-sm">
+            {device.reachable
+              ? 'HireAce is closed on this PC. A restart here starts it again.'
+              : 'This PC is not checking in. Orders wait until it is back, if they have not expired.'}
+          </p>
         )}
       </Card>
 

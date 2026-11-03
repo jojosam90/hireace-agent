@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   CheckCircle2,
-  CircleDashed,
   CircleOff,
   LoaderCircle,
   Power,
@@ -11,7 +10,7 @@ import {
   WifiOff,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useRef, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import type { DeviceView } from '@/lib/types';
 
 /**
@@ -61,6 +60,27 @@ export function Card({ className = '', children, ...rest }: ComponentProps<'sect
   );
 }
 
+/** How long until a page's figures refresh. Click to refresh now. */
+export function RefreshTimer({ lastAt, everyMs, onRefresh }: { lastAt: number; everyMs: number; onRefresh: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.ceil((lastAt + everyMs - now) / 1000));
+  return (
+    <button
+      type="button"
+      onClick={onRefresh}
+      title="Refresh now"
+      className="border-line text-muted hover:bg-brand-50 inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-sm font-semibold tabular-nums transition-colors"
+    >
+      <RefreshCw className="size-3.5" aria-hidden />
+      {seconds === 0 ? 'Refreshing…' : `Refreshes in ${seconds}s`}
+    </button>
+  );
+}
+
 export function CardTitle({ children, hint }: { children: ReactNode; hint?: ReactNode }) {
   return (
     <div className="mb-3">
@@ -90,9 +110,8 @@ export function Badge({ tone, icon: Icon, spin, children }: { tone: Tone; icon?:
 }
 
 const STATES: Record<DeviceView['state'], { tone: Tone; icon: LucideIcon; label: string; spin?: boolean }> = {
-  up: { tone: 'good', icon: CheckCircle2, label: 'Online · HireAce up' },
+  up: { tone: 'good', icon: CheckCircle2, label: 'Online' },
   partial: { tone: 'warn', icon: AlertTriangle, label: 'Online · Partly up' },
-  down: { tone: 'off', icon: CircleDashed, label: 'Online · HireAce down' },
   offline: { tone: 'bad', icon: WifiOff, label: 'Offline' },
   updating: { tone: 'brand', icon: LoaderCircle, label: 'Updating', spin: true },
   deactivated: { tone: 'off', icon: CircleOff, label: 'Deactivated' },

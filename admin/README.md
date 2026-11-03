@@ -27,10 +27,9 @@ starting or ending is reported within seconds, without waiting for the next chec
 
 | Shown as | Means |
 | --- | --- |
-| Online · HireAce up | Monitor checked in lately; gatekeeper, voice agent and web app all run |
-| Online · Partly up | Checked in, but one of the three is not running |
-| Online · HireAce down | Checked in, and HireAce is closed (normal when the user closed the panel) |
-| Offline | No check-in for 3 minutes: PC off, asleep, signed out, or no internet |
+| Online | HireAce is running: gatekeeper, voice agent and web app |
+| Online · Partly up | One of the three is not running |
+| Offline | HireAce is closed (shown within seconds), or no check-in for 3 minutes: PC off, asleep, signed out, or no internet |
 | Deactivated | Turned off here: HireAce stops and will not start until activated |
 
 The monitor runs per Windows user while that user is signed in. It sends the PC and user name,
