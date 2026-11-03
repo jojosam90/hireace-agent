@@ -21,8 +21,8 @@
 
 .PARAMETER Background
   How the desktop icon starts it: with no window of its own. What each part prints
-  goes to log files in %USERPROFILE%\.hireace-agent\logs, and closing the panel stops
-  HireAce (minimizing it shows the little HireAce agent instead).
+  goes to log files in %USERPROFILE%\.hireace-agent\logs, and closing the panel asks
+  whether to stop HireAce (minimizing it shows the little HireAce agent instead).
 
   Only one HireAce runs at a time: starting it again shows the open panel.
 
@@ -210,18 +210,21 @@ try {
   $panelIds = @()
   $tick = 0
   while ($true) {
-    Start-Sleep -Seconds 2
-    # In the background the panel is HireAce's only window: closing it stops HireAce.
-    # Watched by its Chrome process, which is cheap; looking for it (a system-wide
-    # process query) only until it is found, every 10 s
+    Start-Sleep -Milliseconds 500
+    # In the background the panel is HireAce's only window: closing it asks whether to
+    # stop HireAce, and No opens it again. Watched by its Chrome process, which is cheap;
+    # looking for it (a system-wide process query) only until it is found, every 10 s
     if ($Background -and -not $NoPanel) {
       if (-not $panelIds) {
-        if ($tick++ % 5 -eq 0) {
+        if ($tick++ % 20 -eq 0) {
           $panelIds = @(Get-PanelProcesses | Where-Object { $_.CommandLine -notlike '*--type=*' } |
             ForEach-Object { $_.ProcessId })
         }
       } elseif (-not (Get-Process -Id $panelIds -ErrorAction SilentlyContinue)) {
-        break
+        if (Confirm-Exit) { break }
+        Open-Panel
+        $panelIds = @()
+        $tick = 0
       }
     }
     foreach ($name in @($running.Keys)) {

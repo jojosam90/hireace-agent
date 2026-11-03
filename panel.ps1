@@ -54,6 +54,20 @@ function Show-Panel {
   [void][HireAce.Win32]::SetForegroundWindow($window.MainWindowHandle)
 }
 
+# The panel was closed: does the user mean to exit HireAce? No is the default, so a stray
+# Enter cannot stop it. (Chrome's window cannot be kept open, so this comes just after.)
+function Confirm-Exit {
+  Add-Type -AssemblyName System.Windows.Forms
+  $answer = [System.Windows.Forms.MessageBox]::Show(
+    "Exit HireAce?`n`nIt will stop until you start it again from the desktop icon.",
+    'HireAce',
+    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+    [System.Windows.Forms.MessageBoxIcon]::Question,
+    [System.Windows.Forms.MessageBoxDefaultButton]::Button2,
+    [System.Windows.Forms.MessageBoxOptions]::DefaultDesktopOnly)  # in front of everything
+  $answer -eq [System.Windows.Forms.DialogResult]::Yes
+}
+
 function Open-Panel {
   $chrome = @(
     "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
