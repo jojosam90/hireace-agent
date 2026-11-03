@@ -1,5 +1,6 @@
 'use client';
 
+import { useGmailHealth } from '@/hooks/useGmailHealth';
 import { type OnlineStatus, useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { type StringKey, useUiLanguage } from '@/lib/i18n';
 
@@ -12,12 +13,18 @@ const STATUS: Record<OnlineStatus, { label: StringKey; color: string }> = {
 
 /**
  * The HireAce logo, top left of every screen: the mark with a dot showing whether
- * HireAce is there (green: online), plus the name on wider screens (in the narrow
- * panel the Full view / My PC button sits next to the mark).
+ * HireAce is ready, plus the name on wider screens (in the narrow panel the Full view /
+ * My PC button sits next to the mark). Green only when everything is connected: on the
+ * PC that includes Gmail, amber until then. A phone cannot see the PC's browsers.
  */
 export function HireAceLogo() {
   const { t } = useUiLanguage();
-  const status = STATUS[useOnlineStatus()];
+  const online = useOnlineStatus();
+  const { onThisPc, state } = useGmailHealth();
+  const waitingForGmail = online === 'online' && onThisPc && !state.health?.connected;
+  const status = waitingForGmail
+    ? { label: 'gmailBarNotConnected' as StringKey, color: 'bg-amber-400' }
+    : STATUS[online];
 
   return (
     <div

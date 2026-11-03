@@ -25,7 +25,12 @@ from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from browser import BrowserManager
-from local_desktop import browser_tabs
+from local_desktop import (
+    browser_tabs,
+    is_minimized,
+    read_minimized_tabs,
+    repair_hidden_windows,
+)
 
 GMAIL_URL = "https://mail.google.com/"
 SEND_TIMEOUT_S = 60
@@ -60,6 +65,9 @@ _BROWSER_NAMES = {
 }
 # Reading every browser's tabs takes about a second; the panel asks every 10 s
 HEALTH_CACHE_S = 8
+# A minimized window that still shows no tabs is left alone after this (for example not
+# really a browser window); seeing it on screen tells us its tabs anyway
+MAX_PEEKS = 3
 
 
 class GmailError(Exception):
@@ -121,6 +129,7 @@ class GmailWindow:
         self._health: tuple[float, dict] | None = None
         self._health_lock = asyncio.Lock()
         self._known_tabs: dict[int, list[str]] = {}  # window -> its tabs when last seen
+        self._peeks: dict[int, int] = {}  # minimized window -> tries at reading its tabs
 
     async def health(self) -> dict:
         """Is Gmail signed in anywhere: every open browser, read-only (no tab is
@@ -210,15 +219,41 @@ class GmailWindow:
         return {"from": status["email"]}
 
     async def _open_accounts(self) -> list[dict]:
-        """The Gmail accounts open in any browser. Windows reports no tabs for a
-        minimized browser window: its tabs from when it was last seen count."""
+        """The Gmail accounts open in any browser. Windows does not list the tabs of a
+        minimized browser window (at most items inside its page): those from when it
+        was last seen count, and one not seen yet is read without showing it."""
         windows = (await asyncio.to_thread(browser_tabs))["windows"]
+        repair_hidden_windows([int(w["window"]) for w in windows if w.get("window")])
+        minimized = {
+            int(window["window"])
+            for window in windows
+            if window.get("window") and is_minimized(int(window["window"]))
+        }
+        unseen = [
+            int(window["window"])
+            for window in windows
+            if window.get("window")
+            and int(window["window"]) in minimized
+            and not self._known_tabs.get(int(window["window"]))
+            and self._peeks.get(int(window["window"]), 0) < MAX_PEEKS
+            # HireAce's own panel: minimizing it shows the little character instead
+            and window.get("title") != "HireAce"
+        ]
+        read: dict[int, list[str]] = {}
+        if unseen:
+            read = await asyncio.to_thread(read_minimized_tabs, unseen)
+            for handle in unseen:
+                self._peeks[handle] = self._peeks.get(handle, 0) + 1
         known = {}
         for window in windows:
             handle = window.get("window")
-            window["tabs"] = window.get("tabs") or self._known_tabs.get(handle, [])
+            if handle in minimized:
+                window["tabs"] = self._known_tabs.get(handle) or read.get(handle, [])
+            else:
+                window["tabs"] = window.get("tabs") or self._known_tabs.get(handle, [])
             known[handle] = window["tabs"]
         self._known_tabs = known
+        self._peeks = {h: n for h, n in self._peeks.items() if h in known}
         return signed_in_accounts(windows)
 
     async def _send_in_user_browser(

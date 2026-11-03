@@ -305,3 +305,109 @@ async def test_a_minimized_window_keeps_its_last_known_gmail_tab(
         gmail_module, "browser_tabs", lambda: {"windows": [], "selected": None}
     )
     assert await gmail._open_accounts() == []  # closed: forgotten
+
+
+# --- Minimized browsers -----------------------------------------------------------
+
+
+GMAIL_TAB = "Inbox (3) - someone@example.com - Gmail"
+
+
+def _gmail_window(monkeypatch, windows, minimized, read):
+    """A GmailWindow seeing these windows; read: what an off-screen look finds."""
+    import gmail as gmail_module
+
+    looks = []
+
+    def look(handles):
+        looks.append(list(handles))
+        return read(handles)
+
+    monkeypatch.setattr(gmail_module, "browser_tabs", lambda: {"windows": windows(), "selected": None})
+    monkeypatch.setattr(gmail_module, "is_minimized", lambda handle: handle in minimized)
+    monkeypatch.setattr(gmail_module, "read_minimized_tabs", look)
+    return gmail_module.GmailWindow(None), looks
+
+
+async def test_gmail_in_a_background_tab_of_a_minimized_browser_is_found_by_itself(monkeypatch):
+    """The browser was minimized before HireAce started, with another tab in front."""
+    window, looks = _gmail_window(
+        monkeypatch,
+        lambda: [{"browser": "msedge", "window": 1, "title": "Other - Edge", "tabs": ["Primary"]}],
+        {1},
+        lambda handles: {1: ["Other", GMAIL_TAB]},
+    )
+
+    accounts = await window._open_accounts()
+
+    assert [a["email"] for a in accounts] == ["someone@example.com"]
+    assert looks == [[1]]
+    assert [a["email"] for a in await window._open_accounts()] == ["someone@example.com"]
+    assert looks == [[1]]  # read once: not every 10 seconds
+
+
+async def test_a_minimized_window_is_only_looked_at_a_few_times(monkeypatch):
+    import gmail as gmail_module
+
+    window, looks = _gmail_window(
+        monkeypatch,
+        lambda: [{"browser": "chrome", "window": 2, "title": "App", "tabs": []}],
+        {2},
+        lambda handles: {},
+    )
+    for _ in range(gmail_module.MAX_PEEKS + 3):
+        assert await window._open_accounts() == []
+    assert len(looks) == gmail_module.MAX_PEEKS
+
+
+async def test_tabs_seen_on_screen_are_not_looked_for_again_when_minimized(monkeypatch):
+    minimized = set()
+    window, looks = _gmail_window(
+        monkeypatch,
+        lambda: [{"browser": "chrome", "window": 3, "title": "T", "tabs": [] if minimized else [GMAIL_TAB]}],
+        minimized,
+        lambda handles: {},
+    )
+    assert len(await window._open_accounts()) == 1
+    minimized.add(3)
+    assert len(await window._open_accounts()) == 1
+    assert looks == []
+
+
+async def test_page_items_of_a_minimized_browser_never_replace_its_tabs(monkeypatch):
+    minimized = set()
+    tabs = [GMAIL_TAB]
+    window, _ = _gmail_window(
+        monkeypatch,
+        lambda: [{"browser": "chrome", "window": 4, "title": "T", "tabs": list(tabs)}],
+        minimized,
+        lambda handles: {},
+    )
+    await window._open_accounts()
+    minimized.add(4)
+    tabs[:] = ["Primary", "Promotions"]
+    assert len(await window._open_accounts()) == 1
+
+
+async def test_hireace_own_minimized_panel_is_left_alone(monkeypatch):
+    window, looks = _gmail_window(
+        monkeypatch,
+        lambda: [{"browser": "chrome", "window": 5, "title": "HireAce", "tabs": []}],
+        {5},
+        lambda handles: {},
+    )
+    await window._open_accounts()
+    assert looks == []
+
+
+async def test_a_gmail_opened_while_checking_shows_at_the_next_check(monkeypatch):
+    tabs = ["Other"]
+    window, _ = _gmail_window(
+        monkeypatch,
+        lambda: [{"browser": "chrome", "window": 6, "title": "T", "tabs": tabs}],
+        set(),
+        lambda handles: {},
+    )
+    assert await window._open_accounts() == []
+    tabs.append(GMAIL_TAB)
+    assert len(await window._open_accounts()) == 1

@@ -1,61 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useGmailHealth } from '@/hooks/useGmailHealth';
 import { useUiLanguage } from '@/lib/i18n';
 
-interface GmailHealth {
-  checked: boolean;
-  connected: boolean;
-  accounts: { browser: string; email: string }[];
-}
-
-const CHECK_EVERY_MS = 10_000;
-
 /**
- * A small bar on the PC's panel: is Gmail signed in, in any browser (Chrome, Edge...)?
- * Checked every 10 seconds, at once when the user comes back to the panel, and not
- * while it is minimized (each check costs the PC about a second of work). One box per
- * account found; clicking one goes to that account's open tab. It never opens a browser.
+ * Small boxes on the PC's panel: is Gmail signed in, in any browser (Chrome, Edge...)?
+ * Green once connected, amber until then, and updated by itself (useGmailHealth). One box
+ * per account found; clicking one goes to that account's open tab. It never opens a browser.
  */
 export function GmailHealthBar() {
   const { t } = useUiLanguage();
-  const [health, setHealth] = useState<GmailHealth | null>(null);
-  const [failed, setFailed] = useState(false);
+  const { onThisPc, state } = useGmailHealth();
+  const { health, failed } = state;
   // Which box said its tab is gone, until the next check ('' is the box with no address)
   const [notFound, setNotFound] = useState<string | null>(null);
   const [going, setGoing] = useState(false);
 
-  useEffect(() => {
-    if (!['localhost', '127.0.0.1'].includes(window.location.hostname)) return;
-    let stopped = false;
-    const check = async () => {
-      if (document.hidden) return;
-      try {
-        const res = await fetch('/api/gmail/health', { cache: 'no-store' });
-        if (!res.ok) throw new Error(String(res.status));
-        const next: GmailHealth = await res.json();
-        if (!stopped) {
-          setHealth(next);
-          setFailed(false);
-          setNotFound(null);
-        }
-      } catch {
-        if (!stopped) setFailed(true);
-      }
-    };
-    check();
-    const timer = setInterval(check, CHECK_EVERY_MS);
-    document.addEventListener('visibilitychange', check);
-    window.addEventListener('focus', check);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', check);
-      window.removeEventListener('focus', check);
-    };
-  }, []);
+  useEffect(() => setNotFound(null), [state]);
 
-  if (!health && !failed) return null;
+  if (!onThisPc || (!health && !failed)) return null;
 
   const goToGmail = async (email: string) => {
     setGoing(true);
@@ -78,7 +42,7 @@ export function GmailHealthBar() {
   const line = (text: string, on: boolean) => (
     <div className="flex items-start gap-2">
       <span
-        className={`mt-1 size-2 shrink-0 rounded-full ${on ? 'bg-emerald-500' : 'bg-zinc-400'}`}
+        className={`mt-1 size-2 shrink-0 rounded-full ${on ? 'bg-emerald-500' : 'bg-amber-400'}`}
         aria-hidden
       />
       <span className="min-w-0 font-medium break-words">{text}</span>

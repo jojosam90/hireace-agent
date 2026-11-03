@@ -431,6 +431,113 @@ def show_window(hwnd: int, command: int) -> None:
         ctypes.windll.user32.ShowWindow(hwnd, command)
 
 
+GWL_EXSTYLE = -20
+WS_EX_TRANSPARENT = 0x20
+WS_EX_LAYERED = 0x80000
+LWA_ALPHA = 2
+
+
+def _user32_for_windows():
+    """Its own copy of user32: types set on the shared one would affect every other caller."""
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32")
+    user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.GetWindowLongW.restype = ctypes.c_long
+    user32.SetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_long]
+    user32.SetWindowLongW.restype = ctypes.c_long
+    user32.SetLayeredWindowAttributes.argtypes = [wintypes.HWND, wintypes.COLORREF, wintypes.BYTE, wintypes.DWORD]
+    user32.GetLayeredWindowAttributes.argtypes = [
+        wintypes.HWND,
+        ctypes.POINTER(wintypes.COLORREF),
+        ctypes.POINTER(wintypes.BYTE),
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    return user32
+
+
+def read_minimized_tabs(handles: list[int]) -> dict[int, list[str]]:
+    """The tabs of minimized browser windows, which Windows only lists for a window that
+    is showing. Each is shown for a moment fully transparent, click-through and without
+    the focus, read, and put back exactly as it was: nothing appears for the user. (Moving
+    it off-screen does not work: Windows brings it back onto the screen.)"""
+    if sys.platform != "win32" or not handles:
+        return {}
+    import copy
+    import ctypes
+    from ctypes import wintypes
+
+    class Placement(ctypes.Structure):
+        _fields_ = [
+            ("length", wintypes.UINT),
+            ("flags", wintypes.UINT),
+            ("showCmd", wintypes.UINT),
+            ("ptMinPosition", wintypes.POINT),
+            ("ptMaxPosition", wintypes.POINT),
+            ("rcNormalPosition", wintypes.RECT),
+        ]
+
+    user32 = _user32_for_windows()
+    user32.GetWindowPlacement.argtypes = [wintypes.HWND, ctypes.POINTER(Placement)]
+    user32.SetWindowPlacement.argtypes = [wintypes.HWND, ctypes.POINTER(Placement)]
+    saved: dict[int, tuple[Placement, int]] = {}
+    try:
+        for handle in handles:
+            place = Placement()
+            place.length = ctypes.sizeof(Placement)
+            style = user32.GetWindowLongW(handle, GWL_EXSTYLE)
+            # Already layered: its own transparency is not ours to change
+            if style & WS_EX_LAYERED or not user32.GetWindowPlacement(handle, ctypes.byref(place)):
+                continue
+            saved[handle] = (copy.copy(place), style)
+            user32.SetWindowLongW(handle, GWL_EXSTYLE, style | WS_EX_LAYERED | WS_EX_TRANSPARENT)
+            user32.SetLayeredWindowAttributes(handle, 0, 0, LWA_ALPHA)
+            user32.ShowWindow(handle, SW_SHOWNOACTIVATE)
+        time.sleep(0.6)  # the browser needs a moment to list its tabs
+        windows = browser_tabs()["windows"]
+        return {
+            int(window["window"]): window["tabs"]
+            for window in windows
+            if int(window["window"]) in saved
+        }
+    finally:
+        for handle, (place, _) in saved.items():
+            place.showCmd = SW_SHOWMINNOACTIVE
+            user32.SetWindowPlacement(handle, ctypes.byref(place))
+        time.sleep(0.3)  # still transparent while Windows animates it away
+        for handle, (place, style) in saved.items():
+            # Again: a browser can resize itself while it is being shown, even when minimized
+            user32.SetWindowPlacement(handle, ctypes.byref(place))
+            user32.SetLayeredWindowAttributes(handle, 0, 255, LWA_ALPHA)
+            user32.SetWindowLongW(handle, GWL_EXSTYLE, style)
+
+
+def repair_hidden_windows(handles: list[int]) -> list[int]:
+    """Puts back a browser window left transparent, if HireAce was stopped in the moment
+    between read_minimized_tabs hiding it and putting it back."""
+    if sys.platform != "win32":
+        return []
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = _user32_for_windows()
+    repaired = []
+    for handle in handles:
+        style = user32.GetWindowLongW(handle, GWL_EXSTYLE)
+        if not style & WS_EX_LAYERED or not style & WS_EX_TRANSPARENT:
+            continue
+        alpha = wintypes.BYTE()
+        flags = wintypes.DWORD()
+        key = wintypes.COLORREF()
+        found = user32.GetLayeredWindowAttributes(handle, ctypes.byref(key), ctypes.byref(alpha), ctypes.byref(flags))
+        if found and flags.value & LWA_ALPHA and alpha.value == 0:
+            user32.SetLayeredWindowAttributes(handle, 0, 255, LWA_ALPHA)
+            user32.SetWindowLongW(handle, GWL_EXSTYLE, style & ~(WS_EX_LAYERED | WS_EX_TRANSPARENT))
+            repaired.append(handle)
+    return repaired
+
+
 def focus_window_handle(hwnd: int) -> bool:
     """Bring a window to the front by its handle."""
     if sys.platform != "win32":
