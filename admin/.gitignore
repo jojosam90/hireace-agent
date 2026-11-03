@@ -1,0 +1,15 @@
+# Secrets: never committed
+.env
+.env.*
+!.env.example
+.production-admin-password.txt
+
+# The local database
+.data/
+
+# Built or installed
+node_modules/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/

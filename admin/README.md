@@ -3,6 +3,9 @@
 A web app to watch and manage every workstation that has HireAce: online or offline, HireAce up
 or down, updates, restart, deactivate, and OpenAI usage with monthly limits. It works on phones.
 
+This repository is published from the `admin` folder of the HireAce repository, where the `installer`
+scripts and the workstation monitor mentioned below live.
+
 ## How it fits together
 
 ```
@@ -49,7 +52,7 @@ Without `DATABASE_URL` it keeps its data in `admin\.data`.
 ## Put it online
 
 1. **Database:** create a Postgres database (Neon has a free plan) and copy its connection string.
-2. **Vercel:** a new project from this repository, with **Root Directory** `admin`, and every
+2. **Vercel:** a new project from this repository, with every
    setting from `.env.example`:
    - `ADMIN_USERNAME`, and `ADMIN_PASSWORD_HASH` from `pnpm hash-password "a long password"`
    - `SESSION_SECRET`: any long random text
